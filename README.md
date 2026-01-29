@@ -10,6 +10,39 @@
 - 400: 잘못된 요청 (필수 값 누락/유효성 오류)
 - 404: 미존재 (FK 대상, match 미존재 등)
 
+## 실행 방법
+
+1) 환경 변수 설정 (`.env`)
+- 프로젝트 루트에 `.env` 파일 생성
+```properties
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=webpage
+DB_USER=root
+DB_PASSWORD=
+FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
+```
+
+2) DB 스키마 준비
+- `spring.jpa.hibernate.ddl-auto=none` 설정이므로 DB에 DDL을 먼저 생성해야 함
+- `db.sql`을 실행해서 스키마를 생성
+
+3) 실행
+```bash
+./gradlew bootRun
+```
+
+## Firebase 설정
+
+필수 설정
+- Firebase Admin SDK 서비스 계정 키(JSON) 준비
+- `.env`에 `FIREBASE_CREDENTIALS_PATH` 추가
+
+예시
+```properties
+FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
+```
+
 ### 1) 시즌 생성
 - Method/Path: `POST /api/seasons`
 - 요청
