@@ -1,0 +1,7 @@
+package com.aubl.webpage.domain.repository;
+
+import com.aubl.webpage.domain.entity.OAuthToken;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+public interface OAuthTokenRepository extends JpaRepository<OAuthToken, Long> {
+}
