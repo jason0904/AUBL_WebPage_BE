@@ -3,8 +3,6 @@ package com.aubl.webpage.domain.repository;
 import com.aubl.webpage.domain.entity.Game;
 import org.springframework.data.jpa.repository.JpaRepository;
 
-import java.util.List;
-
 public interface GameRepository extends JpaRepository<Game, Long> {
     java.util.Optional<Game> findBySeasonIdAndGameDateAndHomeTeamIdAndAwayTeamId(
         Long seasonId,
@@ -12,6 +10,4 @@ public interface GameRepository extends JpaRepository<Game, Long> {
         Long homeTeamId,
         Long awayTeamId
     );
-
-    List<Game> findBySeasonId(Long seasonId);
 }

@@ -137,7 +137,6 @@ public class FirestoreImportService {
         Game game = resolveGame(season, gameDate, homeTeam, awayTeam);
 
         applyGameResult(game, match);
-        boolean applyStats = !deleteExistingLogs(game);
 
         Map<String, Object> postGame = readMap(match.get("postGame"));
         if (postGame == null) {
@@ -148,29 +147,17 @@ public class FirestoreImportService {
         List<PitcherGameLog> pitcherLogs = new ArrayList<>();
 
         Map<String, Object> batters = readMap(postGame.get("batters"));
-        appendBatterLogs(batterLogs, batters, "home", homeTeam, season, game, applyStats);
-        appendBatterLogs(batterLogs, batters, "away", awayTeam, season, game, applyStats);
+        appendBatterLogs(batterLogs, batters, "home", homeTeam, season, game);
+        appendBatterLogs(batterLogs, batters, "away", awayTeam, season, game);
 
         Map<String, Object> pitchers = readMap(postGame.get("pitchers"));
-        appendPitcherLogs(pitcherLogs, pitchers, "home", homeTeam, season, game, applyStats);
-        appendPitcherLogs(pitcherLogs, pitchers, "away", awayTeam, season, game, applyStats);
+        appendPitcherLogs(pitcherLogs, pitchers, "home", homeTeam, season, game);
+        appendPitcherLogs(pitcherLogs, pitchers, "away", awayTeam, season, game);
 
         batterGameLogRepository.saveAll(batterLogs);
         pitcherGameLogRepository.saveAll(pitcherLogs);
 
         return new ImportCounts(batterLogs.size(), pitcherLogs.size());
-    }
-
-    private boolean deleteExistingLogs(Game game) {
-        long batterCount = batterGameLogRepository.countByGame(game);
-        long pitcherCount = pitcherGameLogRepository.countByGame(game);
-        if (batterCount > 0) {
-            batterGameLogRepository.deleteByGame(game);
-        }
-        if (pitcherCount > 0) {
-            pitcherGameLogRepository.deleteByGame(game);
-        }
-        return batterCount + pitcherCount > 0;
     }
 
     private void applyGameResult(Game game, DocumentSnapshot match) {
@@ -191,8 +178,7 @@ public class FirestoreImportService {
         String side,
         Team team,
         Season season,
-        Game game,
-        boolean applyStats
+        Game game
     ) {
         List<Map<String, Object>> entries = readList(batters, side);
         if (entries == null) {
@@ -222,9 +208,7 @@ public class FirestoreImportService {
             log.setStrikeouts(defaultIfNull(asInteger(entry.get("so"))));
             logs.add(log);
 
-            if (applyStats) {
-                applyBatterStats(batterStats, entry);
-            }
+            applyBatterStats(batterStats, entry);
         }
     }
 
@@ -234,8 +218,7 @@ public class FirestoreImportService {
         String side,
         Team team,
         Season season,
-        Game game,
-        boolean applyStats
+        Game game
     ) {
         List<Map<String, Object>> entries = readList(pitchers, side);
         if (entries == null) {
@@ -263,9 +246,7 @@ public class FirestoreImportService {
             log.setPlayerThrows(asInteger(entry.get("pitches")));
             logs.add(log);
 
-            if (applyStats) {
-                applyPitcherStats(pitcherStats, entry);
-            }
+            applyPitcherStats(pitcherStats, entry);
         }
     }
 
