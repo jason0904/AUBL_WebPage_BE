@@ -1,6 +1,9 @@
 package com.aubl.webpage.domain.repository;
 
 import com.aubl.webpage.domain.entity.PitcherStats;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface PitcherStatsRepository extends JpaRepository<PitcherStats, Long> {
@@ -12,4 +15,8 @@ public interface PitcherStatsRepository extends JpaRepository<PitcherStats, Long
         Long teamPlayerId,
         Long seasonId
     );
+
+    Page<PitcherStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, Pageable pageable);
+
+    java.util.List<PitcherStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, Sort sort);
 }
