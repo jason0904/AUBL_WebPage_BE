@@ -43,8 +43,28 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 ```
 
+### 0) 회원가입
+- Method/Path: `POST /api/auth/signup`
+- 요청
+```json
+{
+  "email": "user@example.com",
+  "password": "plain-text-password",
+  "name": "홍길동",
+  "phoneNumber": "010-1234-5678"
+}
+```
+- 응답
+```json
+{ "id": 1 }
+```
+- 에러
+- 400: `email`, `password`, `name` 누락
+- 409: 이메일 중복
+
 ### 1) 시즌 생성
 - Method/Path: `POST /api/seasons`
+- 인증: 관리자(Authorization: Bearer Firebase ID token with admin=true)
 - 요청
 ```json
 { "year": 2026 }
@@ -118,6 +138,7 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 
 ### 5) 경기 생성
 - Method/Path: `POST /api/games`
+- 인증: 관리자(Authorization: Bearer Firebase ID token with admin=true)
 - 요청
 ```json
 {
@@ -146,6 +167,8 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 - 응답
 ```json
 {
+  "playerName": "김지찬",
+  "teamName": "Alpha College",
   "batterStats": [
     {
       "id": 1,
@@ -261,8 +284,176 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 - 400: 경기 미완료 또는 데이터 오류
 - 404: match/team/game 미존재
 
+### 10) 팀 목록 조회 (팀 코드 포함)
+- Method/Path: `GET /api/teams` (또는 `/api/team`)
+- 요청: 없음
+- 응답
+```json
+[
+  {
+    "id": 1,
+    "teamName": "Alpha College",
+    "teamCode": "team-1"
+  }
+]
+```
+- 에러
+- 기본적으로 없음 (비어 있으면 빈 배열)
+
+### 11) 시즌 목록 조회 (기록실 시즌 선택용)
+- Method/Path: `GET /api/seasons`
+- 요청: 없음
+- 응답
+```json
+[
+  {
+    "id": 1,
+    "year": 2026
+  }
+]
+```
+- 에러
+- 기본적으로 없음 (비어 있으면 빈 배열)
+
+### 12) 시즌 기록실 오버뷰
+- Method/Path: `GET /api/records/overview?seasonId=`
+- 요청: `seasonId` 필수
+- 응답 예시
+```json
+{
+  "seasonId": 1,
+  "totalGames": 20,
+  "totalTeams": 4,
+  "topBatter": {
+    "playerId": 5,
+    "playerName": "Kim",
+    "teamId": 1,
+    "teamName": "Alpha College",
+    "seasonId": 1,
+    "gamesPlayed": 12,
+    "plateAppearance": 45,
+    "atBats": 40,
+    "hits": 14,
+    "homeRuns": 2,
+    "runsBattedIn": 10,
+    "battingAverage": 0.350,
+    "onBasePct": 0.400,
+    "sluggingPct": 0.500,
+    "ops": 0.900
+  },
+  "topPitcher": {
+    "playerId": 6,
+    "playerName": "Lee",
+    "teamId": 2,
+    "teamName": "Beta College",
+    "seasonId": 1,
+    "gamesPlayed": 8,
+    "inningsPitched": 25.2,
+    "wins": 2,
+    "losses": 1,
+    "saves": 0,
+    "strikeouts": 30,
+    "era": 2.45,
+    "whip": 1.05
+  }
+}
+```
+
+### 13) 팀 순위
+- Method/Path: `GET /api/records/teams?seasonId=&division=`
+- 요청: `seasonId` 필수, `division` 현재 미사용(무시)
+- 응답 예시
+```json
+[
+  {
+    "teamId": 1,
+    "teamName": "Alpha",
+    "wins": 10,
+    "losses": 2,
+    "ties": 0,
+    "winPct": 0.833
+  },
+  {
+    "teamId": 2,
+    "teamName": "Beta",
+    "wins": 7,
+    "losses": 5,
+    "ties": 0,
+    "winPct": 0.583
+  }
+]
+```
+
+### 14) 타자 랭킹
+- Method/Path: `GET /api/rankings/batters?seasonId=&limit=&sort=` (기존 `/api/records/batters`와 동일 동작)
+- 요청: `seasonId` 필수, `limit` 기본 0(0 이하이면 전체, 생략 시 전체), 최대 100, `sort` 기본 `battingAverage`
+- sort 옵션: `battingAverage`, `hits`, `homeRuns`, `rbi`, `ops`, `sluggingPct`, `onBasePct`
+- 운영 권장: 실시간 계산보다 시즌 집계 테이블/뷰(예: `BATTER_STATS` 누적)에서 조회하도록 구성하세요.
+- 응답 예시
+```json
+[
+  {
+    "rank": 1,
+    "playerId": 5,
+    "playerName": "Kim",
+    "teamId": 1,
+    "teamName": "Alpha College",
+    "seasonId": 1,
+    "gamesPlayed": 12,
+    "plateAppearance": 45,
+    "atBats": 40,
+    "hits": 14,
+    "homeRuns": 2,
+    "runsBattedIn": 10,
+    "stolenBases": 3,
+    "walks": 6,
+    "strikeouts": 8,
+    "battingAverage": 0.350,
+    "onBasePct": 0.400,
+    "sluggingPct": 0.500,
+    "ops": 0.900
+  }
+]
+```
+
+### 15) 투수 랭킹
+- Method/Path: `GET /api/rankings/pitchers?seasonId=&limit=&sort=` (기존 `/api/records/pitchers`와 동일 동작)
+- 요청: `seasonId` 필수, `limit` 기본 0(0 이하이면 전체, 생략 시 전체), 최대 100, `sort` 기본 `era`
+- sort 옵션: `era`(오름차순), `whip`(오름차순), `strikeouts`, `wins`, `saves`
+- 운영 권장: 실시간 계산보다 시즌 집계 테이블/뷰(예: `PITCHER_STATS` 누적)에서 조회하도록 구성하세요.
+- 응답 예시
+```json
+[
+  {
+    "rank": 1,
+    "playerId": 6,
+    "playerName": "Lee",
+    "teamId": 2,
+    "teamName": "Beta College",
+    "seasonId": 1,
+    "gamesPlayed": 8,
+    "inningsPitched": 25.2,
+    "wins": 2,
+    "losses": 1,
+    "saves": 0,
+    "strikeouts": 30,
+    "walksAllowed": 8,
+    "era": 2.45,
+    "whip": 1.05
+  }
+]
+```
+
 ## Firestore Import 참고
 - 팀 매칭: `TEAM.team_code`
 - 선수 매칭: `(teamId, seasonId, jerseyNumber, playerName)`
 - 시즌: 경기 연도 기준 자동 생성
 - 경기는 사전 등록 필요(자동 생성 안 함)
+
+## CORS 설정
+- 허용 도메인은 프로퍼티 `app.cors.allowed-origins`로 관리(쉼표 구분). 기본값: `http://localhost:3000`.
+- 예시
+```properties
+app.cors.allowed-origins=https://www.example.com,https://admin.example.com,http://localhost:3000
+```
+- `setAllowCredentials(true)` 상태이므로 와일드카드(`*`) 대신 필요한 도메인만 명시하세요.

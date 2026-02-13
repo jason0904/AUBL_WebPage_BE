@@ -10,6 +10,7 @@ import com.aubl.webpage.domain.entity.BatterGameLog;
 import com.aubl.webpage.domain.entity.BatterStats;
 import com.aubl.webpage.domain.entity.PitcherGameLog;
 import com.aubl.webpage.domain.entity.PitcherStats;
+import com.aubl.webpage.domain.entity.Player;
 import com.aubl.webpage.domain.repository.BatterGameLogRepository;
 import com.aubl.webpage.domain.repository.BatterStatsRepository;
 import com.aubl.webpage.domain.repository.GameRepository;
@@ -54,7 +55,8 @@ public class PlayerRecordService {
 
     @Transactional(readOnly = true)
     public PlayerStatsResponse getPlayerStats(Long playerId, Long seasonId) {
-        ensurePlayerExists(playerId);
+        Player player = playerRepository.findById(playerId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "player not found"));
         ensureSeasonExists(seasonId);
         List<BatterStats> batterStats = seasonId == null
             ? batterStatsRepository.findByTeamPlayerPlayerId(playerId)
@@ -64,7 +66,11 @@ public class PlayerRecordService {
             ? pitcherStatsRepository.findByTeamPlayerPlayerId(playerId)
             : pitcherStatsRepository.findByTeamPlayerPlayerIdAndSeasonId(playerId, seasonId);
 
+        String teamName = resolveTeamName(batterStats, pitcherStats);
+
         return new PlayerStatsResponse(
+            player.getPlayerName(),
+            teamName,
             batterStats.stream().map(this::toBatterStatSummary).toList(),
             pitcherStats.stream().map(this::toPitcherStatSummary).toList()
         );
@@ -185,5 +191,23 @@ public class PlayerRecordService {
             log.getWalks(),
             log.getStrikeouts()
         );
+    }
+
+    private String resolveTeamName(List<BatterStats> batterStats, List<PitcherStats> pitcherStats) {
+        if (batterStats != null) {
+            for (BatterStats bs : batterStats) {
+                if (bs != null && bs.getTeamPlayer() != null && bs.getTeamPlayer().getTeam() != null) {
+                    return bs.getTeamPlayer().getTeam().getTeamName();
+                }
+            }
+        }
+        if (pitcherStats != null) {
+            for (PitcherStats ps : pitcherStats) {
+                if (ps != null && ps.getTeamPlayer() != null && ps.getTeamPlayer().getTeam() != null) {
+                    return ps.getTeamPlayer().getTeam().getTeamName();
+                }
+            }
+        }
+        return null;
     }
 }
