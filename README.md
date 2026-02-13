@@ -43,6 +43,12 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 ```
 
+## 인증/인가
+- Firebase ID Token 기반 Bearer 인증 사용. 요청 시 `Authorization: Bearer <ID_TOKEN>` 헤더 전달.
+- 커스텀 클레임 `admin=true`이면 `ROLE_ADMIN` 부여, 아니면 기본 `ROLE_USER`.
+- 보호 경로: `POST /api/seasons/**`, `POST /api/games/**` 는 `ROLE_ADMIN` 필요.
+- 기타 엔드포인트는 현재 오픈(필요 시 추가 인가 정책 적용 가능).
+
 ### 0) 회원가입
 - Method/Path: `POST /api/auth/signup`
 - 요청

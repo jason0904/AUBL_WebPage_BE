@@ -10,4 +10,6 @@ public interface GameRepository extends JpaRepository<Game, Long> {
         Long homeTeamId,
         Long awayTeamId
     );
+
+    java.util.List<Game> findBySeasonId(Long seasonId);
 }

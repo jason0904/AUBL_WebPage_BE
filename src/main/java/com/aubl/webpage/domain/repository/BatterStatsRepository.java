@@ -12,4 +12,8 @@ public interface BatterStatsRepository extends JpaRepository<BatterStats, Long> 
         Long teamPlayerId,
         Long seasonId
     );
+
+    org.springframework.data.domain.Page<BatterStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, org.springframework.data.domain.Pageable pageable);
+
+    java.util.List<BatterStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, org.springframework.data.domain.Sort sort);
 }

@@ -12,4 +12,8 @@ public interface PitcherStatsRepository extends JpaRepository<PitcherStats, Long
         Long teamPlayerId,
         Long seasonId
     );
+
+    org.springframework.data.domain.Page<PitcherStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, org.springframework.data.domain.Pageable pageable);
+
+    java.util.List<PitcherStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, org.springframework.data.domain.Sort sort);
 }
