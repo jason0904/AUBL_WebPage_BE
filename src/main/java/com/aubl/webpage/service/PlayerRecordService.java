@@ -66,10 +66,11 @@ public class PlayerRecordService {
             ? pitcherStatsRepository.findByTeamPlayerPlayerId(playerId)
             : pitcherStatsRepository.findByTeamPlayerPlayerIdAndSeasonId(playerId, seasonId);
 
+        String playerName = resolvePlayerName(player, batterStats, pitcherStats);
         String teamName = resolveTeamName(batterStats, pitcherStats);
 
         return new PlayerStatsResponse(
-            player.getPlayerName(),
+            playerName,
             teamName,
             batterStats.stream().map(this::toBatterStatSummary).toList(),
             pitcherStats.stream().map(this::toPitcherStatSummary).toList()
@@ -191,6 +192,33 @@ public class PlayerRecordService {
             log.getWalks(),
             log.getStrikeouts()
         );
+    }
+
+    private String resolvePlayerName(Player player, List<BatterStats> batterStats, List<PitcherStats> pitcherStats) {
+        if (player != null && player.getPlayerName() != null) {
+            return player.getPlayerName();
+        }
+        if (batterStats != null) {
+            for (BatterStats bs : batterStats) {
+                if (bs != null && bs.getTeamPlayer() != null && bs.getTeamPlayer().getPlayer() != null) {
+                    String name = bs.getTeamPlayer().getPlayer().getPlayerName();
+                    if (name != null) {
+                        return name;
+                    }
+                }
+            }
+        }
+        if (pitcherStats != null) {
+            for (PitcherStats ps : pitcherStats) {
+                if (ps != null && ps.getTeamPlayer() != null && ps.getTeamPlayer().getPlayer() != null) {
+                    String name = ps.getTeamPlayer().getPlayer().getPlayerName();
+                    if (name != null) {
+                        return name;
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     private String resolveTeamName(List<BatterStats> batterStats, List<PitcherStats> pitcherStats) {

@@ -170,7 +170,7 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 ### 6) 선수 시즌 누적 기록 조회
 - Method/Path: `GET /api/players/{playerId}/stats`
 - Query: `seasonId` (옵션)
-- 응답
+- 응답: 상단 `playerName`/`teamName`을 항상 채워서 반환(해당 데이터가 존재하는 경우)
 ```json
 {
   "playerName": "김지찬",

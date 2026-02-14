@@ -25,9 +25,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
+@Transactional(readOnly = true)
 public class RecordService {
 
     private final BatterStatsRepository batterStatsRepository;
@@ -95,9 +97,18 @@ public class RecordService {
             Pageable pageable = PageRequest.of(0, size, sort);
             statsList = batterStatsRepository.findBySeasonIdAndSeasonTypeIsNull(seasonId, pageable).getContent();
         }
-        List<BatterRecord> ranked = new ArrayList<>(statsList.size());
-        for (int i = 0; i < statsList.size(); i++) {
-            ranked.add(toBatterRecord(statsList.get(i), i + 1));
+        List<BatterStats> filtered = new ArrayList<>();
+        for (BatterStats stats : statsList) {
+            if (!isValidBatter(stats)) {
+                continue; // skip null metrics/associations
+            }
+            filtered.add(stats);
+        }
+        filtered.sort(resolveBatterComparator(sortKey));
+
+        List<BatterRecord> ranked = new ArrayList<>();
+        for (BatterStats stats : filtered) {
+            ranked.add(toBatterRecord(stats, ranked.size() + 1));
         }
         return ranked;
     }
@@ -113,9 +124,18 @@ public class RecordService {
             Pageable pageable = PageRequest.of(0, size, sort);
             statsList = pitcherStatsRepository.findBySeasonIdAndSeasonTypeIsNull(seasonId, pageable).getContent();
         }
-        List<PitcherRecord> ranked = new ArrayList<>(statsList.size());
-        for (int i = 0; i < statsList.size(); i++) {
-            ranked.add(toPitcherRecord(statsList.get(i), i + 1));
+        List<PitcherStats> filtered = new ArrayList<>();
+        for (PitcherStats stats : statsList) {
+            if (!isValidPitcher(stats)) {
+                continue; // skip null metrics/associations
+            }
+            filtered.add(stats);
+        }
+        filtered.sort(resolvePitcherComparator(sortKey));
+
+        List<PitcherRecord> ranked = new ArrayList<>();
+        for (PitcherStats stats : filtered) {
+            ranked.add(toPitcherRecord(stats, ranked.size() + 1));
         }
         return ranked;
     }
@@ -150,6 +170,50 @@ public class RecordService {
             case "saves" -> Sort.by(Sort.Direction.DESC, "saves");
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid pitcher sort");
         };
+    }
+
+    private Comparator<BatterStats> resolveBatterComparator(String sortKey) {
+        String key = sortKey == null ? "battingAverage" : sortKey;
+        return switch (key) {
+            case "hits" -> Comparator.comparing(BatterStats::getHits, Comparator.nullsLast(Integer::compareTo)).reversed();
+            case "homeRuns" -> Comparator.comparing(BatterStats::getHomeRuns, Comparator.nullsLast(Integer::compareTo)).reversed();
+            case "rbi" -> Comparator.comparing(BatterStats::getRunsBattedIn, Comparator.nullsLast(Integer::compareTo)).reversed();
+            case "ops" -> Comparator.comparing(BatterStats::getOps, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
+            case "sluggingPct" -> Comparator.comparing(BatterStats::getSluggingPct, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
+            case "onBasePct" -> Comparator.comparing(BatterStats::getOnBasePct, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
+            case "battingAverage" -> Comparator.comparing(BatterStats::getBattingAverage, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid batter sort");
+        };
+    }
+
+    private Comparator<PitcherStats> resolvePitcherComparator(String sortKey) {
+        String key = sortKey == null ? "era" : sortKey;
+        return switch (key) {
+            case "era" -> Comparator.comparing(PitcherStats::getEra, Comparator.nullsLast(BigDecimal::compareTo)); // ascending
+            case "whip" -> Comparator.comparing(PitcherStats::getWhip, Comparator.nullsLast(BigDecimal::compareTo)); // ascending
+            case "strikeouts" -> Comparator.comparing(PitcherStats::getStrikeouts, Comparator.nullsLast(Integer::compareTo)).reversed();
+            case "wins" -> Comparator.comparing(PitcherStats::getWins, Comparator.nullsLast(Integer::compareTo)).reversed();
+            case "saves" -> Comparator.comparing(PitcherStats::getSaves, Comparator.nullsLast(Integer::compareTo)).reversed();
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid pitcher sort");
+        };
+    }
+
+    private boolean isValidBatter(BatterStats stats) {
+        if (stats == null || stats.getTeamPlayer() == null || stats.getTeamPlayer().getPlayer() == null || stats.getTeamPlayer().getTeam() == null) {
+            return false;
+        }
+        return stats.getBattingAverage() != null
+            && stats.getHits() != null
+            && stats.getHomeRuns() != null
+            && stats.getRunsBattedIn() != null;
+    }
+
+    private boolean isValidPitcher(PitcherStats stats) {
+        if (stats == null || stats.getTeamPlayer() == null || stats.getTeamPlayer().getPlayer() == null || stats.getTeamPlayer().getTeam() == null) {
+            return false;
+        }
+        return stats.getEra() != null
+            && stats.getInningsPitched() != null;
     }
 
     private BatterRecord toBatterRecord(BatterStats stats, int rank) {
