@@ -13,6 +13,7 @@ public record BatterGameLogSummary(
     Integer hits,
     Integer rbi,
     Integer walks,
-    Integer strikeouts
+    Integer strikeouts,
+    Integer jerseyNumber
 ) {
 }

@@ -15,6 +15,7 @@ public record BatterStatSummary(
     BigDecimal battingAverage,
     BigDecimal onBasePct,
     BigDecimal sluggingPct,
-    BigDecimal ops
+    BigDecimal ops,
+    Integer jerseyNumber
 ) {
 }

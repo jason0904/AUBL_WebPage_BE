@@ -31,4 +31,6 @@ public interface BatterStatsRepository extends JpaRepository<BatterStats, Long> 
         "join fetch bs.season s " +
         "where s.id = :seasonId and bs.seasonType is null")
     java.util.List<BatterStats> findBySeasonIdWithTeamPlayer(@Param("seasonId") Long seasonId);
+
+    boolean existsByTeamPlayerIdAndSeasonId(Long teamPlayerId, Long seasonId);
 }

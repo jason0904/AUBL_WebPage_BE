@@ -68,10 +68,12 @@ public class PlayerRecordService {
 
         String playerName = resolvePlayerName(player, batterStats, pitcherStats);
         String teamName = resolveTeamName(batterStats, pitcherStats);
+        Integer jerseyNumber = resolveJerseyNumber(batterStats, pitcherStats);
 
         return new PlayerStatsResponse(
             playerName,
             teamName,
+            jerseyNumber,
             batterStats.stream().map(this::toBatterStatSummary).toList(),
             pitcherStats.stream().map(this::toPitcherStatSummary).toList()
         );
@@ -133,7 +135,8 @@ public class PlayerRecordService {
             stats.getBattingAverage(),
             stats.getOnBasePct(),
             stats.getSluggingPct(),
-            stats.getOps()
+            stats.getOps(),
+            stats.getTeamPlayer().getJerseyNumber()
         );
     }
 
@@ -152,12 +155,16 @@ public class PlayerRecordService {
             stats.getEra(),
             stats.getWhip(),
             stats.getKPer9(),
-            stats.getBbPer9()
+            stats.getBbPer9(),
+            stats.getTeamPlayer().getJerseyNumber()
         );
     }
 
     private BatterGameLogSummary toBatterGameLogSummary(BatterGameLog log) {
         Long playerId = log.getPlayer() == null ? null : log.getPlayer().getId();
+        Integer jerseyNumber = log.getBatterStats() == null || log.getBatterStats().getTeamPlayer() == null
+            ? null
+            : log.getBatterStats().getTeamPlayer().getJerseyNumber();
         return new BatterGameLogSummary(
             log.getId(),
             log.getGame().getId(),
@@ -171,12 +178,16 @@ public class PlayerRecordService {
             log.getHits(),
             log.getRbi(),
             log.getWalks(),
-            log.getStrikeouts()
+            log.getStrikeouts(),
+            jerseyNumber
         );
     }
 
     private PitcherGameLogSummary toPitcherGameLogSummary(PitcherGameLog log) {
         Long playerId = log.getPlayer() == null ? null : log.getPlayer().getId();
+        Integer jerseyNumber = log.getPitcherStats() == null || log.getPitcherStats().getTeamPlayer() == null
+            ? null
+            : log.getPitcherStats().getTeamPlayer().getJerseyNumber();
         return new PitcherGameLogSummary(
             log.getId(),
             log.getGame().getId(),
@@ -190,7 +201,8 @@ public class PlayerRecordService {
             log.getRunsAllowed(),
             log.getEarnedRuns(),
             log.getWalks(),
-            log.getStrikeouts()
+            log.getStrikeouts(),
+            jerseyNumber
         );
     }
 
@@ -233,6 +245,24 @@ public class PlayerRecordService {
             for (PitcherStats ps : pitcherStats) {
                 if (ps != null && ps.getTeamPlayer() != null && ps.getTeamPlayer().getTeam() != null) {
                     return ps.getTeamPlayer().getTeam().getTeamName();
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer resolveJerseyNumber(List<BatterStats> batterStats, List<PitcherStats> pitcherStats) {
+        if (batterStats != null) {
+            for (BatterStats bs : batterStats) {
+                if (bs != null && bs.getTeamPlayer() != null && bs.getTeamPlayer().getJerseyNumber() != null) {
+                    return bs.getTeamPlayer().getJerseyNumber();
+                }
+            }
+        }
+        if (pitcherStats != null) {
+            for (PitcherStats ps : pitcherStats) {
+                if (ps != null && ps.getTeamPlayer() != null && ps.getTeamPlayer().getJerseyNumber() != null) {
+                    return ps.getTeamPlayer().getJerseyNumber();
                 }
             }
         }

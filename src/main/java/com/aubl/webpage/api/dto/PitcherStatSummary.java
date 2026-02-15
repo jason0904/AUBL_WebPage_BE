@@ -16,6 +16,7 @@ public record PitcherStatSummary(
     BigDecimal era,
     BigDecimal whip,
     BigDecimal kPer9,
-    BigDecimal bbPer9
+    BigDecimal bbPer9,
+    Integer jerseyNumber
 ) {
 }

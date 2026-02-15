@@ -2,9 +2,6 @@
 
 ## API 명세
 
-기본 URL
-- `http://localhost:8080`
-
 공통 응답
 - 200: 성공
 - 400: 잘못된 요청 (필수 값 누락/유효성 오류)
@@ -175,6 +172,7 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 {
   "playerName": "김지찬",
   "teamName": "Alpha College",
+  "jerseyNumber": 10,
   "batterStats": [
     {
       "id": 1,
@@ -189,7 +187,8 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
       "battingAverage": 0.350,
       "onBasePct": 0.400,
       "sluggingPct": 0.500,
-      "ops": 0.900
+      "ops": 0.900,
+      "jerseyNumber": 10
     }
   ],
   "pitcherStats": [
@@ -207,7 +206,8 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
       "era": 2.45,
       "whip": 1.05,
       "kPer9": 8.70,
-      "bbPer9": 2.10
+      "bbPer9": 2.10,
+      "jerseyNumber": 10
     }
   ]
 }
@@ -236,7 +236,8 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
       "hits": 2,
       "rbi": 1,
       "walks": 0,
-      "strikeouts": 1
+      "strikeouts": 1,
+      "jerseyNumber": 10
     }
   ],
   "pitcherLogs": [
@@ -253,7 +254,8 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
       "runsAllowed": 2,
       "earnedRuns": 2,
       "walks": 1,
-      "strikeouts": 7
+      "strikeouts": 7,
+      "jerseyNumber": 10
     }
   ]
 }
@@ -331,10 +333,12 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
   "totalGames": 20,
   "totalTeams": 4,
   "topBatter": {
+    "rank": 1,
     "playerId": 5,
     "playerName": "Kim",
     "teamId": 1,
     "teamName": "Alpha College",
+    "jerseyNumber": 10,
     "seasonId": 1,
     "gamesPlayed": 12,
     "plateAppearance": 45,
@@ -348,10 +352,12 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
     "ops": 0.900
   },
   "topPitcher": {
+    "rank": 1,
     "playerId": 6,
     "playerName": "Lee",
     "teamId": 2,
     "teamName": "Beta College",
+    "jerseyNumber": 18,
     "seasonId": 1,
     "gamesPlayed": 8,
     "inningsPitched": 25.2,
@@ -404,6 +410,7 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
     "playerName": "Kim",
     "teamId": 1,
     "teamName": "Alpha College",
+    "jerseyNumber": 10,
     "seasonId": 1,
     "gamesPlayed": 12,
     "plateAppearance": 45,
@@ -436,6 +443,7 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
     "playerName": "Lee",
     "teamId": 2,
     "teamName": "Beta College",
+    "jerseyNumber": 18,
     "seasonId": 1,
     "gamesPlayed": 8,
     "inningsPitched": 25.2,
@@ -449,6 +457,93 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
   }
 ]
 ```
+
+### 16) 팀/시즌별 선수 목록 조회
+- Method/Path: `GET /api/team-players?teamId=&seasonId=`
+- 요청: `teamId` 필수, `seasonId` 필수
+- 응답 예시
+```json
+[
+  {
+    "teamPlayerId": 10,
+    "teamId": 1,
+    "teamName": "Alpha College",
+    "seasonId": 1,
+    "playerId": 5,
+    "playerName": "Kim",
+    "jerseyNumber": 10,
+    "position": "SS"
+  }
+]
+```
+- 에러
+- 400: `teamId`, `seasonId` 누락
+- 404: team 또는 season 미존재
+
+### 17) 시즌 선수 로스터 조회 (무기록 선수 포함)
+- Method/Path: `GET /api/players/roster?seasonId=&teamId=&q=&limit=&cursor=`
+- 요청: `seasonId` 필수, `teamId` 옵션, `q` 옵션(이름 부분검색, 공백 무시), `limit` 기본 50/최대 500, `cursor` 옵션(Base64)
+- 동작: TEAM_PLAYER + PLAYER + TEAM 기반 조회. 랭킹/기록 테이블 의존 금지.
+- 응답 예시
+```json
+{
+  "items": [
+    {
+      "seasonId": 11,
+      "teamId": 34,
+      "teamName": "연세대학교 EAGLES",
+      "teamCode": "yonsei",
+      "teamPlayerId": 12548,
+      "playerId": 42,
+      "playerName": "강대건",
+      "jerseyNumber": "27",
+      "hasBatterStats": true,
+      "hasPitcherStats": false
+    }
+  ],
+  "nextCursor": "eyJ0cElkIjoxMjU0OH0=",
+  "hasNext": true,
+  "totalCount": 412
+}
+```
+- 에러: 400 seasonId 누락/형식오류, 404 season/team 미존재
+
+### 18) 선수 기본 프로필 조회
+- Method/Path: `GET /api/players/{playerId}/profile?seasonId=`
+- 요청: `playerId` 필수(Path), `seasonId` 옵션(있으면 해당 시즌 소속 우선)
+- 동작: 기록 유무와 상관없이 이름/등번호/소속팀 반환.
+- 응답 예시
+```json
+{
+  "playerId": 42,
+  "playerName": "강대건",
+  "seasonId": 11,
+  "teamId": 34,
+  "teamName": "연세대학교 EAGLES",
+  "teamCode": "yonsei",
+  "jerseyNumber": 27
+}
+```
+- 에러: 404 player 미존재, 404 season 지정 시 해당 시즌 소속 없음
+
+### 19) 선수 검색 자동완성
+- Method/Path: `GET /api/players/search?seasonId=&q=&teamId=&limit=`
+- 요청: `seasonId` 필수, `q` 필수(1자 이상, 공백 무시), `teamId` 옵션, `limit` 기본 20/최대 50
+- 동작: TEAM_PLAYER 기반 이름 부분 검색. 팀명 표기는 원문 유지, 검색은 정규화(공백 무시/소문자) 비교.
+- 응답 예시
+```json
+[
+  {
+    "playerId": 42,
+    "playerName": "강대건",
+    "teamId": 34,
+    "teamName": "연세대학교 EAGLES",
+    "jerseyNumber": 27,
+    "seasonId": 11
+  }
+]
+```
+- 에러: 400 seasonId/q 누락/형식오류, 404 season/team 미존재
 
 ## Firestore Import 참고
 - 팀 매칭: `TEAM.team_code`

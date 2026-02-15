@@ -15,6 +15,7 @@ public record PitcherGameLogSummary(
     Integer runsAllowed,
     Integer earnedRuns,
     Integer walks,
-    Integer strikeouts
+    Integer strikeouts,
+    Integer jerseyNumber
 ) {
 }
