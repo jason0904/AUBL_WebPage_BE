@@ -19,10 +19,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,7 +44,7 @@ public class RecordService {
 
     public OverviewResponse getOverview(Long seasonId) {
         requireSeason(seasonId);
-        List<Game> games = gameRepository.findBySeasonId(seasonId);
+        List<Game> games = gameRepository.findWithTeamsBySeasonId(seasonId);
         int totalGames = (int) games.stream()
             .filter(g -> g.getHomeScore() != null && g.getAwayScore() != null)
             .count();
@@ -67,7 +63,7 @@ public class RecordService {
 
     public List<TeamRecord> getTeamRecords(Long seasonId) {
         requireSeason(seasonId);
-        List<Game> games = gameRepository.findBySeasonId(seasonId);
+        List<Game> games = gameRepository.findWithTeamsBySeasonId(seasonId);
         Map<Long, TeamRecordAccumulator> standings = new HashMap<>();
 
         for (Game game : games) {
@@ -88,15 +84,9 @@ public class RecordService {
 
     public List<BatterRecord> getTopBatters(Long seasonId, int limit, String sortKey) {
         requireSeason(seasonId);
-        Sort sort = resolveBatterSort(sortKey);
-        List<BatterStats> statsList;
-        if (limit <= 0) {
-            statsList = batterStatsRepository.findBySeasonIdAndSeasonTypeIsNull(seasonId, sort);
-        } else {
-            int size = Math.min(limit, 100);
-            Pageable pageable = PageRequest.of(0, size, sort);
-            statsList = batterStatsRepository.findBySeasonIdAndSeasonTypeIsNull(seasonId, pageable).getContent();
-        }
+        List<BatterStats> statsList = batterStatsRepository.findBySeasonIdWithTeamPlayer(seasonId);
+        Comparator<BatterStats> comparator = resolveBatterComparator(sortKey);
+
         List<BatterStats> filtered = new ArrayList<>();
         for (BatterStats stats : statsList) {
             if (!isValidBatter(stats)) {
@@ -104,7 +94,10 @@ public class RecordService {
             }
             filtered.add(stats);
         }
-        filtered.sort(resolveBatterComparator(sortKey));
+        filtered.sort(comparator);
+        if (limit > 0 && filtered.size() > limit) {
+            filtered = filtered.subList(0, limit);
+        }
 
         List<BatterRecord> ranked = new ArrayList<>();
         for (BatterStats stats : filtered) {
@@ -115,15 +108,9 @@ public class RecordService {
 
     public List<PitcherRecord> getTopPitchers(Long seasonId, int limit, String sortKey) {
         requireSeason(seasonId);
-        Sort sort = resolvePitcherSort(sortKey);
-        List<PitcherStats> statsList;
-        if (limit <= 0) {
-            statsList = pitcherStatsRepository.findBySeasonIdAndSeasonTypeIsNull(seasonId, sort);
-        } else {
-            int size = Math.min(limit, 100);
-            Pageable pageable = PageRequest.of(0, size, sort);
-            statsList = pitcherStatsRepository.findBySeasonIdAndSeasonTypeIsNull(seasonId, pageable).getContent();
-        }
+        List<PitcherStats> statsList = pitcherStatsRepository.findBySeasonIdWithTeamPlayer(seasonId);
+        Comparator<PitcherStats> comparator = resolvePitcherComparator(sortKey);
+
         List<PitcherStats> filtered = new ArrayList<>();
         for (PitcherStats stats : statsList) {
             if (!isValidPitcher(stats)) {
@@ -131,7 +118,10 @@ public class RecordService {
             }
             filtered.add(stats);
         }
-        filtered.sort(resolvePitcherComparator(sortKey));
+        filtered.sort(comparator);
+        if (limit > 0 && filtered.size() > limit) {
+            filtered = filtered.subList(0, limit);
+        }
 
         List<PitcherRecord> ranked = new ArrayList<>();
         for (PitcherStats stats : filtered) {
@@ -144,32 +134,6 @@ public class RecordService {
         if (seasonId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "seasonId is required");
         }
-    }
-
-    private Sort resolveBatterSort(String sortKey) {
-        String key = sortKey == null ? "battingAverage" : sortKey;
-        return switch (key) {
-            case "hits" -> Sort.by(Sort.Direction.DESC, "hits");
-            case "homeRuns" -> Sort.by(Sort.Direction.DESC, "homeRuns");
-            case "rbi" -> Sort.by(Sort.Direction.DESC, "runsBattedIn");
-            case "ops" -> Sort.by(Sort.Direction.DESC, "ops");
-            case "sluggingPct" -> Sort.by(Sort.Direction.DESC, "sluggingPct");
-            case "onBasePct" -> Sort.by(Sort.Direction.DESC, "onBasePct");
-            case "battingAverage" -> Sort.by(Sort.Direction.DESC, "battingAverage");
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid batter sort");
-        };
-    }
-
-    private Sort resolvePitcherSort(String sortKey) {
-        String key = sortKey == null ? "era" : sortKey;
-        return switch (key) {
-            case "era" -> Sort.by(Sort.Direction.ASC, "era");
-            case "whip" -> Sort.by(Sort.Direction.ASC, "whip");
-            case "strikeouts" -> Sort.by(Sort.Direction.DESC, "strikeouts");
-            case "wins" -> Sort.by(Sort.Direction.DESC, "wins");
-            case "saves" -> Sort.by(Sort.Direction.DESC, "saves");
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid pitcher sort");
-        };
     }
 
     private Comparator<BatterStats> resolveBatterComparator(String sortKey) {

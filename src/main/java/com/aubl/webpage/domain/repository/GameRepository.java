@@ -1,6 +1,7 @@
 package com.aubl.webpage.domain.repository;
 
 import com.aubl.webpage.domain.entity.Game;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface GameRepository extends JpaRepository<Game, Long> {
@@ -12,4 +13,7 @@ public interface GameRepository extends JpaRepository<Game, Long> {
     );
 
     java.util.List<Game> findBySeasonId(Long seasonId);
+
+    @EntityGraph(attributePaths = {"homeTeam", "awayTeam"})
+    java.util.List<Game> findWithTeamsBySeasonId(Long seasonId);
 }
