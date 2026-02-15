@@ -5,4 +5,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface SeasonRepository extends JpaRepository<Season, Long> {
     java.util.Optional<Season> findByYear(Integer year);
+    java.util.List<Season> findAllByOrderByYearAsc();
 }

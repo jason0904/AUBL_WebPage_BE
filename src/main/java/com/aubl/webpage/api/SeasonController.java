@@ -2,9 +2,12 @@ package com.aubl.webpage.api;
 
 import com.aubl.webpage.api.dto.IdResponse;
 import com.aubl.webpage.api.dto.SeasonCreateRequest;
+import com.aubl.webpage.api.dto.SeasonResponse;
 import com.aubl.webpage.domain.entity.Season;
 import com.aubl.webpage.service.SeasonService;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +21,11 @@ public class SeasonController {
 
     public SeasonController(SeasonService seasonService) {
         this.seasonService = seasonService;
+    }
+
+    @GetMapping
+    public ResponseEntity<List<SeasonResponse>> getSeasons() {
+        return ResponseEntity.ok(seasonService.getSeasons());
     }
 
     @PostMapping

@@ -1,10 +1,13 @@
 package com.aubl.webpage.service;
 
 import com.aubl.webpage.api.dto.TeamCreateRequest;
+import com.aubl.webpage.api.dto.TeamSummary;
 import com.aubl.webpage.domain.entity.Team;
 import com.aubl.webpage.domain.entity.UserAccount;
 import com.aubl.webpage.domain.repository.TeamRepository;
 import com.aubl.webpage.domain.repository.UserAccountRepository;
+import java.util.List;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,5 +39,12 @@ public class TeamService {
         }
         return userAccountRepository.findById(managerId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "manager not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<TeamSummary> getTeams() {
+        return teamRepository.findAll(Sort.by(Sort.Direction.ASC, "teamName")).stream()
+            .map(t -> new TeamSummary(t.getId(), t.getTeamName(), t.getTeamCode()))
+            .toList();
     }
 }

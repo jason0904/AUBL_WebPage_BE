@@ -2,9 +2,12 @@ package com.aubl.webpage.api;
 
 import com.aubl.webpage.api.dto.IdResponse;
 import com.aubl.webpage.api.dto.TeamCreateRequest;
+import com.aubl.webpage.api.dto.TeamSummary;
 import com.aubl.webpage.domain.entity.Team;
 import com.aubl.webpage.service.TeamService;
+import java.util.List;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,6 +21,11 @@ public class TeamController {
 
     public TeamController(TeamService teamService) {
         this.teamService = teamService;
+    }
+
+    @GetMapping
+    public ResponseEntity<List<TeamSummary>> getTeams() {
+        return ResponseEntity.ok(teamService.getTeams());
     }
 
     @PostMapping
