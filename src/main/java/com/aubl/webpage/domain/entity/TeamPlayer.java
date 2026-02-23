@@ -54,4 +54,7 @@ public class TeamPlayer {
 
     @Column(name = "jersey_number")
     private Integer jerseyNumber;
+
+    @Column(name = "part_code", length = 2)
+    private String partCode;
 }

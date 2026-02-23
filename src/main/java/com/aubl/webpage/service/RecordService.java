@@ -55,8 +55,10 @@ public class RecordService {
             .distinct()
             .count();
 
-        BatterRecord topBatter = getTopBatters(seasonId, 1, "ops").stream().findFirst().orElse(null);
-        PitcherRecord topPitcher = getTopPitchers(seasonId, 1, "era").stream().findFirst().orElse(null);
+        BatterRecord topBatter = getTopBatters(new RankingQuery(seasonId, 1, "ops", null, null, null, null, null, null))
+            .stream().findFirst().orElse(null);
+        PitcherRecord topPitcher = getTopPitchers(new RankingQuery(seasonId, 1, "era", null, null, null, null, null, null))
+            .stream().findFirst().orElse(null);
 
         return new OverviewResponse(seasonId, totalGames, totalTeams, topBatter, topPitcher);
     }
@@ -83,49 +85,53 @@ public class RecordService {
     }
 
     public List<BatterRecord> getTopBatters(Long seasonId, int limit, String sortKey) {
-        requireSeason(seasonId);
-        List<BatterStats> statsList = batterStatsRepository.findBySeasonIdWithTeamPlayer(seasonId);
-        Comparator<BatterStats> comparator = resolveBatterComparator(sortKey);
+        return getTopBatters(new RankingQuery(seasonId, limit, sortKey, null, null, null, null, null, null));
+    }
 
+    public List<PitcherRecord> getTopPitchers(Long seasonId, int limit, String sortKey) {
+        return getTopPitchers(new RankingQuery(seasonId, limit, sortKey, null, null, null, null, null, null));
+    }
+
+    public List<BatterRecord> getTopBatters(RankingQuery query) {
+        requireSeason(query.seasonId());
+        List<BatterStats> statsList = batterStatsRepository.findBySeasonIdWithTeamPlayer(query.seasonId());
+        Comparator<BatterStats> comparator = resolveBatterComparator(query.sortKey(), query.sortOrder());
         List<BatterStats> filtered = new ArrayList<>();
         for (BatterStats stats : statsList) {
             if (!isValidBatter(stats)) {
-                continue; // skip null metrics/associations
+                continue;
             }
             filtered.add(stats);
         }
         filtered.sort(comparator);
-        if (limit > 0 && filtered.size() > limit) {
-            filtered = filtered.subList(0, limit);
+        if (query.limit() > 0 && filtered.size() > query.limit()) {
+            filtered = filtered.subList(0, query.limit());
         }
-
         List<BatterRecord> ranked = new ArrayList<>();
         for (BatterStats stats : filtered) {
-            ranked.add(toBatterRecord(stats, ranked.size() + 1));
+            ranked.add(toBatterRecord(stats, ranked.size() + 1, query));
         }
         return ranked;
     }
 
-    public List<PitcherRecord> getTopPitchers(Long seasonId, int limit, String sortKey) {
-        requireSeason(seasonId);
-        List<PitcherStats> statsList = pitcherStatsRepository.findBySeasonIdWithTeamPlayer(seasonId);
-        Comparator<PitcherStats> comparator = resolvePitcherComparator(sortKey);
-
+    public List<PitcherRecord> getTopPitchers(RankingQuery query) {
+        requireSeason(query.seasonId());
+        List<PitcherStats> statsList = pitcherStatsRepository.findBySeasonIdWithTeamPlayer(query.seasonId());
+        Comparator<PitcherStats> comparator = resolvePitcherComparator(query.sortKey(), query.sortOrder());
         List<PitcherStats> filtered = new ArrayList<>();
         for (PitcherStats stats : statsList) {
             if (!isValidPitcher(stats)) {
-                continue; // skip null metrics/associations
+                continue;
             }
             filtered.add(stats);
         }
         filtered.sort(comparator);
-        if (limit > 0 && filtered.size() > limit) {
-            filtered = filtered.subList(0, limit);
+        if (query.limit() > 0 && filtered.size() > query.limit()) {
+            filtered = filtered.subList(0, query.limit());
         }
-
         List<PitcherRecord> ranked = new ArrayList<>();
         for (PitcherStats stats : filtered) {
-            ranked.add(toPitcherRecord(stats, ranked.size() + 1));
+            ranked.add(toPitcherRecord(stats, ranked.size() + 1, query));
         }
         return ranked;
     }
@@ -136,52 +142,56 @@ public class RecordService {
         }
     }
 
-    private Comparator<BatterStats> resolveBatterComparator(String sortKey) {
+    private Comparator<BatterStats> resolveBatterComparator(String sortKey, String sortOrder) {
         String key = sortKey == null ? "battingAverage" : sortKey;
-        return switch (key) {
-            case "hits" -> Comparator.comparing(BatterStats::getHits, Comparator.nullsLast(Integer::compareTo)).reversed();
-            case "homeRuns" -> Comparator.comparing(BatterStats::getHomeRuns, Comparator.nullsLast(Integer::compareTo)).reversed();
-            case "rbi" -> Comparator.comparing(BatterStats::getRunsBattedIn, Comparator.nullsLast(Integer::compareTo)).reversed();
-            case "ops" -> Comparator.comparing(BatterStats::getOps, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
-            case "sluggingPct" -> Comparator.comparing(BatterStats::getSluggingPct, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
-            case "onBasePct" -> Comparator.comparing(BatterStats::getOnBasePct, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
-            case "battingAverage" -> Comparator.comparing(BatterStats::getBattingAverage, Comparator.nullsLast(BigDecimal::compareTo)).reversed();
+        Comparator<BatterStats> base = switch (key) {
+            case "hits" -> Comparator.comparing(BatterStats::getHits, Comparator.nullsLast(Integer::compareTo));
+            case "homeRuns" -> Comparator.comparing(BatterStats::getHomeRuns, Comparator.nullsLast(Integer::compareTo));
+            case "rbi" -> Comparator.comparing(BatterStats::getRunsBattedIn, Comparator.nullsLast(Integer::compareTo));
+            case "ops" -> Comparator.comparing(BatterStats::getOps, Comparator.nullsLast(BigDecimal::compareTo));
+            case "sluggingPct" -> Comparator.comparing(BatterStats::getSluggingPct, Comparator.nullsLast(BigDecimal::compareTo));
+            case "onBasePct" -> Comparator.comparing(BatterStats::getOnBasePct, Comparator.nullsLast(BigDecimal::compareTo));
+            case "battingAverage" -> Comparator.comparing(BatterStats::getBattingAverage, Comparator.nullsLast(BigDecimal::compareTo));
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid batter sort");
         };
+        return applyOrder(base, sortOrder, key.equals("battingAverage") || key.equals("ops") || key.equals("sluggingPct") || key.equals("onBasePct") ? "desc" : null);
     }
 
-    private Comparator<PitcherStats> resolvePitcherComparator(String sortKey) {
+    private Comparator<PitcherStats> resolvePitcherComparator(String sortKey, String sortOrder) {
         String key = sortKey == null ? "era" : sortKey;
-        return switch (key) {
-            case "era" -> Comparator.comparing(PitcherStats::getEra, Comparator.nullsLast(BigDecimal::compareTo)); // ascending
-            case "whip" -> Comparator.comparing(PitcherStats::getWhip, Comparator.nullsLast(BigDecimal::compareTo)); // ascending
-            case "strikeouts" -> Comparator.comparing(PitcherStats::getStrikeouts, Comparator.nullsLast(Integer::compareTo)).reversed();
-            case "wins" -> Comparator.comparing(PitcherStats::getWins, Comparator.nullsLast(Integer::compareTo)).reversed();
-            case "saves" -> Comparator.comparing(PitcherStats::getSaves, Comparator.nullsLast(Integer::compareTo)).reversed();
+        Comparator<PitcherStats> base = switch (key) {
+            case "era" -> Comparator.comparing(PitcherStats::getEra, Comparator.nullsLast(BigDecimal::compareTo));
+            case "whip" -> Comparator.comparing(PitcherStats::getWhip, Comparator.nullsLast(BigDecimal::compareTo));
+            case "strikeouts" -> Comparator.comparing(PitcherStats::getStrikeouts, Comparator.nullsLast(Integer::compareTo));
+            case "wins" -> Comparator.comparing(PitcherStats::getWins, Comparator.nullsLast(Integer::compareTo));
+            case "saves" -> Comparator.comparing(PitcherStats::getSaves, Comparator.nullsLast(Integer::compareTo));
+            case "inningsPitched" -> Comparator.comparing(PitcherStats::getInningsPitched, Comparator.nullsLast(BigDecimal::compareTo));
+            case "walksAllowed" -> Comparator.comparing(PitcherStats::getWalksAllowed, Comparator.nullsLast(Integer::compareTo));
+            case "gamesPlayed" -> Comparator.comparing(PitcherStats::getGamesPlayed, Comparator.nullsLast(Integer::compareTo));
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid pitcher sort");
         };
+        // ERA/WHIP는 기본 asc, 나머지는 기본 desc
+        String defaultOrder = (key.equals("era") || key.equals("whip")) ? "asc" : "desc";
+        return applyOrder(base, sortOrder, defaultOrder);
     }
 
-    private boolean isValidBatter(BatterStats stats) {
-        if (stats == null || stats.getTeamPlayer() == null || stats.getTeamPlayer().getPlayer() == null || stats.getTeamPlayer().getTeam() == null) {
-            return false;
+    private <T> Comparator<T> applyOrder(Comparator<T> base, String sortOrder, String defaultOrder) {
+        String order = (sortOrder == null || sortOrder.isBlank()) ? defaultOrder : sortOrder;
+        if (order == null || order.equalsIgnoreCase("desc")) {
+            return base.reversed();
         }
-        return stats.getBattingAverage() != null
-            && stats.getHits() != null
-            && stats.getHomeRuns() != null
-            && stats.getRunsBattedIn() != null;
-    }
-
-    private boolean isValidPitcher(PitcherStats stats) {
-        if (stats == null || stats.getTeamPlayer() == null || stats.getTeamPlayer().getPlayer() == null || stats.getTeamPlayer().getTeam() == null) {
-            return false;
+        if (order.equalsIgnoreCase("asc")) {
+            return base;
         }
-        return stats.getEra() != null
-            && stats.getInningsPitched() != null;
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "invalid sortOrder");
     }
 
-    private BatterRecord toBatterRecord(BatterStats stats, int rank) {
+    private BatterRecord toBatterRecord(BatterStats stats, int rank, RankingQuery query) {
         TeamPlayer tp = stats.getTeamPlayer();
+        String partCode = query.partCode() != null ? query.partCode() : tp.getPartCode();
+        String group = mapGroup(partCode, query.group());
+        String scope = query.scope();
+        String regulation = query.regulation();
         return new BatterRecord(
             rank,
             tp.getPlayer().getId(),
@@ -202,12 +212,21 @@ public class RecordService {
             stats.getBattingAverage(),
             stats.getOnBasePct(),
             stats.getSluggingPct(),
-            stats.getOps()
+            stats.getOps(),
+            partCode,
+            group,
+            scope,
+            stats.getSeasonType(),
+            regulation
         );
     }
 
-    private PitcherRecord toPitcherRecord(PitcherStats stats, int rank) {
+    private PitcherRecord toPitcherRecord(PitcherStats stats, int rank, RankingQuery query) {
         TeamPlayer tp = stats.getTeamPlayer();
+        String partCode = query.partCode() != null ? query.partCode() : tp.getPartCode();
+        String group = mapGroup(partCode, query.group());
+        String scope = query.scope();
+        String regulation = query.regulation();
         return new PitcherRecord(
             rank,
             tp.getPlayer().getId(),
@@ -224,8 +243,64 @@ public class RecordService {
             stats.getStrikeouts(),
             stats.getWalksAllowed(),
             stats.getEra(),
-            stats.getWhip()
+            stats.getWhip(),
+            partCode,
+            group,
+            scope,
+            stats.getSeasonType(),
+            regulation
         );
+    }
+
+    private String mapGroup(String partCode, String requestedGroup) {
+        if (requestedGroup != null && !requestedGroup.isBlank()) {
+            return requestedGroup;
+        }
+        if (partCode == null) {
+            return null;
+        }
+        return switch (partCode) {
+            case "1" -> "A";
+            case "2" -> "B";
+            case "3" -> "C";
+            case "4" -> "D";
+            case "5" -> "E";
+            case "6" -> "F";
+            case "7" -> "G";
+            case "8" -> "H";
+            default -> null;
+        };
+    }
+
+    public record RankingQuery(
+        Long seasonId,
+        int limit,
+        String sortKey,
+        String sortOrder,
+        String scope,
+        String group,
+        String partCode,
+        String playoffDivision,
+        String regulation
+    ) {
+    }
+
+    private boolean isValidBatter(BatterStats stats) {
+        if (stats == null || stats.getTeamPlayer() == null || stats.getTeamPlayer().getPlayer() == null || stats.getTeamPlayer().getTeam() == null) {
+            return false;
+        }
+        return stats.getBattingAverage() != null
+            && stats.getHits() != null
+            && stats.getHomeRuns() != null
+            && stats.getRunsBattedIn() != null;
+    }
+
+    private boolean isValidPitcher(PitcherStats stats) {
+        if (stats == null || stats.getTeamPlayer() == null || stats.getTeamPlayer().getPlayer() == null || stats.getTeamPlayer().getTeam() == null) {
+            return false;
+        }
+        return stats.getEra() != null
+            && stats.getInningsPitched() != null;
     }
 
     private void accumulate(
@@ -248,7 +323,6 @@ public class RecordService {
             acc.losses += 1;
         }
     }
-
 
     private static class TeamRecordAccumulator {
         private final Team team;

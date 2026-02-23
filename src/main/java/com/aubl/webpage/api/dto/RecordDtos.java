@@ -43,7 +43,12 @@ public class RecordDtos {
         BigDecimal battingAverage,
         BigDecimal onBasePct,
         BigDecimal sluggingPct,
-        BigDecimal ops
+        BigDecimal ops,
+        String partCode,
+        String group,
+        String scope,
+        String seasonType,
+        String regulation
     ) {
     }
 
@@ -63,7 +68,12 @@ public class RecordDtos {
         Integer strikeouts,
         Integer walksAllowed,
         BigDecimal era,
-        BigDecimal whip
+        BigDecimal whip,
+        String partCode,
+        String group,
+        String scope,
+        String seasonType,
+        String regulation
     ) {
     }
 }

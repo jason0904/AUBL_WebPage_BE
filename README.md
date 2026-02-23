@@ -346,10 +346,18 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
     "hits": 14,
     "homeRuns": 2,
     "runsBattedIn": 10,
+    "stolenBases": 3,
+    "walks": 6,
+    "strikeouts": 8,
     "battingAverage": 0.350,
     "onBasePct": 0.400,
     "sluggingPct": 0.500,
-    "ops": 0.900
+    "ops": 0.900,
+    "partCode": null,
+    "group": null,
+    "scope": null,
+    "seasonType": null,
+    "regulation": null
   },
   "topPitcher": {
     "rank": 1,
@@ -365,8 +373,14 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
     "losses": 1,
     "saves": 0,
     "strikeouts": 30,
+    "walksAllowed": 8,
     "era": 2.45,
-    "whip": 1.05
+    "whip": 1.05,
+    "partCode": null,
+    "group": null,
+    "scope": null,
+    "seasonType": null,
+    "regulation": null
   }
 }
 ```
@@ -424,7 +438,12 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
     "battingAverage": 0.350,
     "onBasePct": 0.400,
     "sluggingPct": 0.500,
-    "ops": 0.900
+    "ops": 0.900,
+    "partCode": "1",
+    "group": "A",
+    "scope": "LEAGUE",
+    "seasonType": "정규시즌",
+    "regulation": "IN"
   }
 ]
 ```
@@ -453,7 +472,12 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
     "strikeouts": 30,
     "walksAllowed": 8,
     "era": 2.45,
-    "whip": 1.05
+    "whip": 1.05,
+    "partCode": "1",
+    "group": "A",
+    "scope": "LEAGUE",
+    "seasonType": "정규시즌",
+    "regulation": "IN"
   }
 ]
 ```
@@ -558,3 +582,11 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 app.cors.allowed-origins=https://www.example.com,https://admin.example.com,http://localhost:3000
 ```
 - `setAllowCredentials(true)` 상태이므로 와일드카드(`*`) 대신 필요한 도메인만 명시하세요.
+
+## 기록실 필터/랭킹 규격 (v3 통합)
+- 공통 Query: `seasonId`(필수, >0), `scope=ALL|LEAGUE|PLAYOFF`(기본 ALL), `group=ALL|A..H`, `partCode=1..8`(group alias), `playoffDivision=ALL|EUTTEUM|BEOGEUM`(alias: division), `regulation=IN|OUT|ALL`(기본 ALL, 기본 요청 IN), `sort`, `sortOrder=asc|desc`, `limit`(0이면 전체).
+- 우선순위: group > partCode, division는 playoffDivision alias. playoffDivision!=ALL이면 scope=PLAYOFF로 해석.
+- 조 매핑: `1:A, 2:B, 3:C, 4:D, 5:E, 6:F, 7:G, 8:H`, 정렬/옵션은 `partCode ASC` 고정(팀명순 금지).
+- 응답 공통 메타 필드(각 row): `partCode`, `group`, `scope`, `seasonType`, `regulation`(null 허용). Top5는 `limit=5`+`regulation=IN`으로 재현.
+- 정렬 허용: 타자 `battingAverage|hits|homeRuns|rbi|ops|sluggingPct|onBasePct|gamesPlayed|plateAppearance`, 투수 `era|whip|strikeouts|wins|saves|inningsPitched|walksAllowed|gamesPlayed`.
+- 팀/오버뷰/순위/랭킹/필터옵션/플레이오프/파워랭킹 모두 위 필터/메타 규칙을 준수. enum/sort 오류는 400, 시즌 없음 404, 결과 없음은 200+빈 배열(overview는 0/nullable).

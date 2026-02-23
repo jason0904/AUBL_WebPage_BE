@@ -88,6 +88,7 @@ CREATE TABLE TEAM_PLAYER (
                              player_id INT NOT NULL,
                              season_id INT NOT NULL,
                              jersey_number INT,  -- 등번호
+                             part_code VARCHAR(2),  -- 조 구분(1~8)
 
                              FOREIGN KEY (team_id) REFERENCES TEAM(team_id),
                              FOREIGN KEY (player_id) REFERENCES PLAYER(player_id),
@@ -275,6 +276,7 @@ CREATE INDEX idx_player_user ON PLAYER(user_id);
 CREATE INDEX idx_team_player_season ON TEAM_PLAYER(season_id);
 CREATE INDEX idx_team_player_team ON TEAM_PLAYER(team_id);
 CREATE INDEX idx_team_player_player ON TEAM_PLAYER(player_id);
+CREATE INDEX idx_team_player_part ON TEAM_PLAYER(part_code, season_id);
 
 -- GAME 조회 최적화
 CREATE INDEX idx_game_season ON GAME(season_id);
