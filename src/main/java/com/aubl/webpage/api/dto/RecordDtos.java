@@ -19,8 +19,16 @@ public class RecordDtos {
         int wins,
         int losses,
         int ties,
-        BigDecimal winPct
+        BigDecimal winPct,
+        String partCode,
+        String group,
+        String scope,
+        String seasonType
     ) {
+        /** 하위 호환 생성자 — partCode/group/scope/seasonType 없을 때 */
+        public TeamRecord(Long teamId, String teamName, int wins, int losses, int ties, BigDecimal winPct) {
+            this(teamId, teamName, wins, losses, ties, winPct, null, null, null, null);
+        }
     }
 
     public record BatterRecord(

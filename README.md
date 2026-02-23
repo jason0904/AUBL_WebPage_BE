@@ -569,6 +569,184 @@ FIREBASE_CREDENTIALS_PATH=C:/path/to/service-account.json
 ```
 - 에러: 400 seasonId/q 누락/형식오류, 404 season/team 미존재
 
+### 20) 플레이오프 경기 목록 조회
+- Method/Path: `GET /api/records/playoffs?seasonId=&view=games&tier=`
+- 요청: `seasonId` 필수, `view` 옵션(기본 `games`), `tier` 옵션(기본 `ALL`)
+  - `tier=ALL` → 으뜸+버금 전체
+  - `tier=EUTTEUM` → 으뜸만
+  - `tier=BEOGEUM` → 버금만
+- 동작: `GAME.playoff_tier` / `GAME.playoff_round` 기반 조회. 라운드 순서: `ROUND_OF_16 → QUARTER_FINAL → SEMI_FINAL → FINAL`
+- 요청 예시
+```
+GET /api/records/playoffs?seasonId=1
+GET /api/records/playoffs?seasonId=1&tier=EUTTEUM
+```
+- 응답 예시
+```json
+[
+  {
+    "seasonId": 1,
+    "seasonYear": 2017,
+    "gameId": 42,
+    "gameDate": "2017-10-01",
+    "gameType": "포스트시즌",
+    "playoffTier": "EUTTEUM",
+    "playoffRound": "FINAL",
+    "homeTeamId": 3,
+    "homeTeamName": "연세대학교 EAGLES",
+    "homeScore": 5,
+    "awayTeamId": 7,
+    "awayTeamName": "고려대학교 TIGERS",
+    "awayScore": 3,
+    "scope": "PLAYOFF"
+  }
+]
+```
+- 에러: 400 seasonId 누락/tier 오류, 404 season 미존재, 결과 없으면 200 + 빈 배열
+
+### 21) 플레이오프 팀별 집계 조회
+- Method/Path: `GET /api/records/playoffs?seasonId=&view=teams&tier=`
+- 요청: `seasonId` 필수, `view=teams`, `tier` 옵션(기본 `ALL`)
+- 동작: 포스트시즌 경기 결과를 팀별로 집계. `bestRound`는 해당 팀이 진출한 가장 높은 라운드.
+- 요청 예시
+```
+GET /api/records/playoffs?seasonId=1&view=teams
+GET /api/records/playoffs?seasonId=1&view=teams&tier=BEOGEUM
+```
+- 응답 예시
+```json
+[
+  {
+    "seasonId": 1,
+    "seasonYear": 2017,
+    "teamId": 3,
+    "teamName": "연세대학교 EAGLES",
+    "playoffTier": "EUTTEUM",
+    "bestRound": "FINAL",
+    "wins": 4,
+    "losses": 0,
+    "runsScored": 22,
+    "runsAllowed": 10,
+    "scope": "PLAYOFF",
+    "partCode": "2",
+    "group": "B"
+  },
+  {
+    "seasonId": 1,
+    "seasonYear": 2017,
+    "teamId": 7,
+    "teamName": "고려대학교 TIGERS",
+    "playoffTier": "EUTTEUM",
+    "bestRound": "FINAL",
+    "wins": 3,
+    "losses": 1,
+    "runsScored": 15,
+    "runsAllowed": 12,
+    "scope": "PLAYOFF",
+    "partCode": "5",
+    "group": "E"
+  }
+]
+```
+- 에러: 400 seasonId 누락/tier 오류, 404 season 미존재, 결과 없으면 200 + 빈 배열
+
+### 22) 파워랭킹 목록 조회
+- Method/Path: `GET /api/records/power-ranking?rankingYear=&limit=`
+- 요청: `rankingYear` 필수, `limit` 옵션 (기본 0 = 전체)
+- 동작: `POWER_RANKING` 캐시(최신 `calc_version`)에서 조회. `rebuild` 실행 전에는 빈 배열 반환. `weightedScore` 내림차순 정렬 후 `rank` 부여.
+- 요청 예시
+```
+GET /api/records/power-ranking?rankingYear=2023
+GET /api/records/power-ranking?rankingYear=2023&limit=10
+```
+- 응답 예시
+```json
+[
+  {
+    "rank": 1,
+    "teamId": 3,
+    "teamName": "한양대학교 WILDCAT",
+    "weightedScore": 80.800,
+    "y1Score": 32.000,
+    "y2Score": 37.000,
+    "y3Score": 49.000,
+    "windowYears": [2021, 2022, 2023],
+    "calcVersion": 1
+  },
+  {
+    "rank": 2,
+    "teamId": 7,
+    "teamName": "연세대학교 EAGLES",
+    "weightedScore": 65.400,
+    "y1Score": 28.000,
+    "y2Score": 30.000,
+    "y3Score": 42.000,
+    "windowYears": [2021, 2022, 2023],
+    "calcVersion": 1
+  }
+]
+```
+- 에러: 400 rankingYear 누락, 결과 없으면 200 + 빈 배열
+
+### 23) 팀별 연도별 파워랭킹 원점수 조회
+- Method/Path: `GET /api/records/power-ranking/season-scores?teamId=&fromYear=&toYear=`
+- 요청: `teamId` 필수, `fromYear`/`toYear` 옵션 (없으면 전체)
+- 동작: 팀의 연도별 예선 원점수·환산점수·본선점수·합계를 반환. POWER_RANKING 캐시가 있으면 캐시 우선, 없으면 실시간 계산
+- 요청 예시
+```
+GET /api/records/power-ranking/season-scores?teamId=3&fromYear=2021&toYear=2023
+```
+- 응답 예시
+```json
+[
+  {
+    "seasonYear": 2021,
+    "prelimRaw": 9.000,
+    "prelimNormalized": 12.000,
+    "finalsPoints": 20.000,
+    "total": 32.000
+  },
+  {
+    "seasonYear": 2022,
+    "prelimRaw": 12.000,
+    "prelimNormalized": 12.000,
+    "finalsPoints": 25.000,
+    "total": 37.000
+  },
+  {
+    "seasonYear": 2023,
+    "prelimRaw": 24.000,
+    "prelimNormalized": 24.000,
+    "finalsPoints": 25.000,
+    "total": 49.000
+  }
+]
+```
+- 에러: 400 teamId 누락, 404 team 미존재, 결과 없으면 200 + 빈 배열
+
+### 23) 파워랭킹 재계산 (관리자 전용)
+- Method/Path: `POST /api/admin/records/power-ranking/rebuild?fromYear=&toYear=`
+- 요청: `fromYear`/`toYear` 옵션 (없으면 전체 연도), **ADMIN 권한 필요** (`Authorization: Bearer <Firebase ID Token>`)
+- 동작: `fromYear`~`toYear` 범위의 각 `rankingYear`에 대해 파워랭킹을 재계산하고 `POWER_RANKING` 테이블에 새 `calc_version`으로 저장
+  - 파워랭킹 공식: `총점 = (y1 × 0.3) + (y2 × 0.6) + (y3 × 1.0)`
+  - `y1` = rankingYear-2 성적, `y2` = rankingYear-1, `y3` = rankingYear
+  - 예선 환산 승점 = `(승×3 + 무×1) × (기준경기수 / 실제경기수)`
+  - 본선 점수: 우승 25점, 준우승 20점, 4강 15점, 8강 10점, 16강 5점
+- 요청 예시
+```
+POST /api/admin/records/power-ranking/rebuild?fromYear=2021&toYear=2023
+Authorization: Bearer <Firebase Admin Token>
+```
+- 응답 예시
+```json
+{
+  "runId": "a3f2c1d4-...",
+  "startedAt": "2026-02-24T10:30:00",
+  "status": "COMPLETED"
+}
+```
+- 에러: 400 fromYear > toYear, 401/403 권한 없음
+
 ## Firestore Import 참고
 - 팀 매칭: `TEAM.team_code`
 - 선수 매칭: `(teamId, seasonId, jerseyNumber, playerName)`
@@ -583,10 +761,84 @@ app.cors.allowed-origins=https://www.example.com,https://admin.example.com,http:
 ```
 - `setAllowCredentials(true)` 상태이므로 와일드카드(`*`) 대신 필요한 도메인만 명시하세요.
 
-## 기록실 필터/랭킹 규격 (v3 통합)
-- 공통 Query: `seasonId`(필수, >0), `scope=ALL|LEAGUE|PLAYOFF`(기본 ALL), `group=ALL|A..H`, `partCode=1..8`(group alias), `playoffDivision=ALL|EUTTEUM|BEOGEUM`(alias: division), `regulation=IN|OUT|ALL`(기본 ALL, 기본 요청 IN), `sort`, `sortOrder=asc|desc`, `limit`(0이면 전체).
-- 우선순위: group > partCode, division는 playoffDivision alias. playoffDivision!=ALL이면 scope=PLAYOFF로 해석.
-- 조 매핑: `1:A, 2:B, 3:C, 4:D, 5:E, 6:F, 7:G, 8:H`, 정렬/옵션은 `partCode ASC` 고정(팀명순 금지).
-- 응답 공통 메타 필드(각 row): `partCode`, `group`, `scope`, `seasonType`, `regulation`(null 허용). Top5는 `limit=5`+`regulation=IN`으로 재현.
-- 정렬 허용: 타자 `battingAverage|hits|homeRuns|rbi|ops|sluggingPct|onBasePct|gamesPlayed|plateAppearance`, 투수 `era|whip|strikeouts|wins|saves|inningsPitched|walksAllowed|gamesPlayed`.
-- 팀/오버뷰/순위/랭킹/필터옵션/플레이오프/파워랭킹 모두 위 필터/메타 규칙을 준수. enum/sort 오류는 400, 시즌 없음 404, 결과 없음은 200+빈 배열(overview는 0/nullable).
+## 기록실 필터/랭킹 규격
+
+### 공통 Query 파라미터
+| 파라미터 | 설명 | 기본값 |
+|---|---|---|
+| `seasonId` | 시즌 ID (필수, >0) | - |
+| `scope` | `ALL \| LEAGUE \| PLAYOFF` | `ALL` |
+| `group` | `ALL \| A \| B \| ... \| H` | `ALL` |
+| `partCode` | `1`~`8` (group alias, group 미지정 시 사용) | - |
+| `playoffDivision` | `ALL \| EUTTEUM \| BEOGEUM` | `ALL` |
+| `division` | `playoffDivision` legacy alias | - |
+| `regulation` | `IN \| OUT \| ALL` | `ALL` (프론트 기본 요청: `IN`) |
+| `sort` | 엔드포인트별 허용 키 | 엔드포인트별 기본값 |
+| `sortOrder` | `asc \| desc` | 항목별 기본값 |
+| `limit` | 상위 N개 제한 (0 = 전체) | `0` |
+
+### 필터 적용 규칙
+- `group` 우선, 없으면 `partCode` 사용. `group(A~H)` → `partCode(1~8)` 역매핑.
+- `playoffDivision != ALL` → 내부적으로 `scope=PLAYOFF` 강제.
+- **조 정보는 반드시 DB `TEAM_PLAYER.part_code` 기반. 팀명/정렬순 추론 금지.**
+- 조 정렬: `partCode ASC` 고정 (A→H).
+- `regulation=IN`: 유효 통계 보유 선수만, `OUT`: 미달 선수만, `ALL`: 전체.
+- enum/sort 오류 → 400, 시즌 없음 → 404, 결과 없음 → 200 + 빈 배열.
+
+### 응답 공통 메타 필드
+각 row에 항상 포함:
+```json
+{
+  "partCode": "1",
+  "group": "A",
+  "scope": "LEAGUE",
+  "seasonType": null,
+  "regulation": "IN"
+}
+```
+
+### 타자 sort 허용값
+`battingAverage`(기본) · `hits` · `homeRuns` · `rbi` · `ops` · `sluggingPct` · `onBasePct` · `gamesPlayed` · `plateAppearance` · `stolenBases`
+
+### 투수 sort 허용값
+`era`(기본, asc) · `whip`(asc) · `strikeouts` · `wins` · `saves` · `inningsPitched` · `walksAllowed` · `gamesPlayed`
+
+---
+
+### 25) 필터 옵션 조회
+- Method/Path: `GET /api/records/filter-options?seasonId=`
+- 요청: `seasonId` 필수
+- 동작: `TEAM_PLAYER.part_code` DB 기반으로 해당 시즌의 실제 조 목록만 반환. 하드코딩 없음.
+- 요청 예시
+```
+GET /api/records/filter-options?seasonId=11
+```
+- 응답 예시
+```json
+{
+  "seasonId": 11,
+  "groups": [
+    { "partCode": "1", "group": "A", "label": "A조", "order": 1 },
+    { "partCode": "2", "group": "B", "label": "B조", "order": 2 },
+    { "partCode": "8", "group": "H", "label": "H조", "order": 8 }
+  ],
+  "scopes": ["LEAGUE", "PLAYOFF"],
+  "playoffDivisions": ["EUTTEUM", "BEOGEUM"],
+  "regulations": ["IN", "OUT"],
+  "defaultRegulation": "IN",
+  "batterSortOptions": ["battingAverage", "hits", "homeRuns", "rbi", "ops", "sluggingPct", "onBasePct", "gamesPlayed", "plateAppearance"],
+  "pitcherSortOptions": ["era", "whip", "strikeouts", "wins", "saves", "inningsPitched", "walksAllowed", "gamesPlayed"]
+}
+```
+- 에러: 400 seasonId 누락, 결과 없으면 groups=[]
+
+### 26) 팀 순위 (standings)
+- Method/Path: `GET /api/records/standings?seasonId=&scope=&group=&partCode=&playoffDivision=&division=`
+- 요청: `seasonId` 필수, 나머지 옵션
+- 동작: `GET /api/records/teams`와 동일 로직. scope/group 필터 적용.
+- 요청 예시
+```
+GET /api/records/standings?seasonId=1&scope=LEAGUE&group=A
+GET /api/records/standings?seasonId=1&playoffDivision=EUTTEUM
+```
+- 응답 예시: `GET /api/records/teams`와 동일 형식

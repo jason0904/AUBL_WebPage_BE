@@ -26,6 +26,20 @@ public interface TeamPlayerRepository extends JpaRepository<TeamPlayer, Long> {
     @EntityGraph(attributePaths = {"team", "season"})
     java.util.List<TeamPlayer> findDistinctBySeasonId(Long seasonId);
 
+    /** 시즌에 실제 사용된 part_code 목록 (오름차순, null 제외) */
+    @Query("SELECT DISTINCT tp.partCode FROM TeamPlayer tp WHERE tp.season.id = :seasonId "
+        + "AND tp.partCode IS NOT NULL ORDER BY tp.partCode ASC")
+    java.util.List<String> findDistinctPartCodesBySeasonId(@Param("seasonId") Long seasonId);
+
+    /**
+     * 시즌별 팀ID → partCode 매핑 조회.
+     * 같은 팀에 여러 partCode가 있을 수 있으므로 DISTINCT + 첫 번째 값 사용.
+     * 반환: Object[]{teamId, partCode}
+     */
+    @Query("SELECT DISTINCT tp.team.id, tp.partCode FROM TeamPlayer tp "
+        + "WHERE tp.season.id = :seasonId AND tp.partCode IS NOT NULL")
+    java.util.List<Object[]> findTeamPartCodesBySeasonId(@Param("seasonId") Long seasonId);
+
     @EntityGraph(attributePaths = {"team", "player", "season"})
     @Query("select tp from TeamPlayer tp join tp.player p join tp.team t join tp.season s " +
         "where s.id = :seasonId " +

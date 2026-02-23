@@ -110,6 +110,9 @@ CREATE TABLE GAME (
                       home_score INT,
                       away_score INT,
                       game_type VARCHAR(20),  -- '정규시즌', '포스트시즌'
+                      -- 플레이오프 전용 (game_type='포스트시즌' 일 때만 유효)
+                      playoff_tier VARCHAR(10),   -- 'EUTTEUM'(으뜸) | 'BEOGEUM'(버금) | NULL
+                      playoff_round VARCHAR(20),  -- 'ROUND_OF_16' | 'QUARTER_FINAL' | 'SEMI_FINAL' | 'FINAL' | NULL
                       csv_file_path VARCHAR(500),  -- CSV 파일 경로
 
                       FOREIGN KEY (season_id) REFERENCES SEASON(season_id),
@@ -256,6 +259,63 @@ CREATE TABLE PITCHER_GAME_LOG (
 );
 
 -- ============================================
+-- 12. TEAM_SEASON_RESULT 테이블 (팀별 시즌 예선 결과 — 파워랭킹 입력값)
+-- ============================================
+-- 파워랭킹 계산에 필요한 수동 입력 데이터.
+-- 본선 성적은 GAME(playoff_tier, playoff_round)에서 자동 계산.
+-- 수동 입력이 필요한 것: 예선 환산 기준 경기 수만.
+CREATE TABLE TEAM_SEASON_RESULT (
+    result_id INT AUTO_INCREMENT PRIMARY KEY,
+    team_id INT NOT NULL,
+    season_id INT NOT NULL,
+
+    -- 예선 환산 기준 경기 수 (기본 4경기, 3경기 조는 3으로 입력)
+    -- 환산 승점 = (승×3 + 무×1) × (prelim_games_standard / 실제경기수)
+    -- 실제 승/무/패는 GAME 테이블에서 자동 집계
+    prelim_games_standard INT NOT NULL DEFAULT 4,
+
+    -- 메모 (수동 입력 시 참고용)
+    note VARCHAR(200),
+
+    FOREIGN KEY (team_id) REFERENCES TEAM(team_id),
+    FOREIGN KEY (season_id) REFERENCES SEASON(season_id),
+    UNIQUE KEY unique_team_season_result (team_id, season_id)
+);
+
+-- ============================================
+-- 13. POWER_RANKING 테이블 (파워랭킹 집계 캐시)
+-- ============================================
+-- rebuild API 호출 시 갱신. 직접 수정 금지.
+-- 총점 = (y1_score × 0.3) + (y2_score × 0.6) + (y3_score × 1.0)
+-- 단, 해당 연도 데이터가 없으면 0으로 처리.
+CREATE TABLE POWER_RANKING (
+    ranking_id INT AUTO_INCREMENT PRIMARY KEY,
+    ranking_year INT NOT NULL,          -- 랭킹 기준 연도 (최근 연도, 예: 2024)
+    team_id INT NOT NULL,
+
+    -- 3개년 원점수 (각 연도의 환산승점 + 본선점수 합계)
+    y1_score    DECIMAL(8,3) NOT NULL DEFAULT 0,  -- ranking_year - 2 성적
+    y2_score    DECIMAL(8,3) NOT NULL DEFAULT 0,  -- ranking_year - 1 성적
+    y3_score    DECIMAL(8,3) NOT NULL DEFAULT 0,  -- ranking_year 성적
+
+    -- 최종 가중치 합산 점수
+    weighted_score DECIMAL(8,3) NOT NULL DEFAULT 0,  -- y1×0.3 + y2×0.6 + y3×1.0
+
+    -- 어떤 연도 데이터가 반영됐는지 (JSON 배열, 예: "[2021,2022,2023]")
+    window_years VARCHAR(50),
+
+    -- 집계 버전 (rebuild 할 때마다 증가, 동일 ranking_year 내 최신값만 사용)
+    calc_version INT NOT NULL DEFAULT 1,
+
+    -- 집계 시각
+    calculated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (team_id) REFERENCES TEAM(team_id),
+    UNIQUE KEY unique_power_ranking (ranking_year, team_id, calc_version)
+);
+
+
+-- ============================================
 -- 인덱스 생성 (성능 최적화)
 -- ============================================
 
@@ -296,3 +356,12 @@ CREATE INDEX idx_batter_log_stat ON BATTER_GAME_LOG(batter_stat_id);
 CREATE INDEX idx_pitcher_log_game ON PITCHER_GAME_LOG(game_idx);
 CREATE INDEX idx_pitcher_log_player ON PITCHER_GAME_LOG(player_idx);
 CREATE INDEX idx_pitcher_log_stat ON PITCHER_GAME_LOG(pitcher_stat_id);
+
+-- TEAM_SEASON_RESULT 조회 최적화
+CREATE INDEX idx_team_season_result_season ON TEAM_SEASON_RESULT(season_id);
+CREATE INDEX idx_team_season_result_team ON TEAM_SEASON_RESULT(team_id);
+
+-- POWER_RANKING 조회 최적화
+CREATE INDEX idx_power_ranking_year ON POWER_RANKING(ranking_year, calc_version);
+CREATE INDEX idx_power_ranking_team ON POWER_RANKING(team_id);
+

@@ -61,6 +61,12 @@ public class Game {
     @Column(name = "game_type", length = 20)
     private String gameType;
 
+    @Column(name = "playoff_tier", length = 10)
+    private String playoffTier;
+
+    @Column(name = "playoff_round", length = 20)
+    private String playoffRound;
+
     @Column(name = "csv_file_path", length = 500)
     private String csvFilePath;
 }
