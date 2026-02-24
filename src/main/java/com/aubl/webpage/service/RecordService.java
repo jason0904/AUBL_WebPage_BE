@@ -118,8 +118,9 @@ public class RecordService {
                 if (!homeMatch && !awayMatch) continue;
             }
 
-            accumulate(standings, game.getHomeTeam(), game.getHomeScore(), game.getAwayTeam(), game.getAwayScore());
-            accumulate(standings, game.getAwayTeam(), game.getAwayScore(), game.getHomeTeam(), game.getHomeScore());
+            String tier = game.getPlayoffTier();
+            accumulate(standings, game.getHomeTeam(), game.getHomeScore(), game.getAwayTeam(), game.getAwayScore(), tier);
+            accumulate(standings, game.getAwayTeam(), game.getAwayScore(), game.getHomeTeam(), game.getHomeScore(), tier);
         }
 
         // resolvedScope → 응답 scope 문자열
@@ -438,18 +439,22 @@ public class RecordService {
     }
 
     private void accumulate(Map<Long, TeamRecordAccumulator> map, Team team,
-        Integer teamScore, Team opponent, Integer opponentScore) {
+        Integer teamScore, Team opponent, Integer opponentScore, String playoffTier) {
         if (team == null || teamScore == null || opponentScore == null) return;
         TeamRecordAccumulator acc = map.computeIfAbsent(team.getId(), id -> new TeamRecordAccumulator(team));
         acc.games += 1;
         if (teamScore > opponentScore)           acc.wins++;
         else if (teamScore.equals(opponentScore)) acc.ties++;
         else                                      acc.losses++;
+        if (playoffTier != null && acc.playoffTier == null) {
+            acc.playoffTier = playoffTier;
+        }
     }
 
     private static class TeamRecordAccumulator {
         private final Team team;
         private int games, wins, losses, ties;
+        private String playoffTier;
         TeamRecordAccumulator(Team team) { this.team = team; }
         BigDecimal winPct() {
             if (games == 0) return BigDecimal.ZERO.setScale(3, RoundingMode.HALF_UP);
@@ -464,7 +469,7 @@ public class RecordService {
         /** AC4: partCode/group/scope 포함 */
         TeamRecord toDto(String partCode, String group, String scope) {
             return new TeamRecord(team.getId(), team.getTeamName(), wins, losses, ties, winPct(),
-                partCode, group, scope, null);
+                partCode, group, scope, playoffTier);
         }
     }
 }
