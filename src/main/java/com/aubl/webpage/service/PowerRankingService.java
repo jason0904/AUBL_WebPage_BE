@@ -8,7 +8,6 @@ import com.aubl.webpage.domain.repository.GameRepository;
 import com.aubl.webpage.domain.repository.PowerRankingRepository;
 import com.aubl.webpage.domain.repository.SeasonRepository;
 import com.aubl.webpage.domain.repository.TeamRepository;
-import com.aubl.webpage.domain.repository.TeamSeasonResultRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -43,20 +42,17 @@ public class PowerRankingService {
     private final GameRepository gameRepository;
     private final SeasonRepository seasonRepository;
     private final TeamRepository teamRepository;
-    private final TeamSeasonResultRepository teamSeasonResultRepository;
     private final PowerRankingRepository powerRankingRepository;
 
     public PowerRankingService(
         GameRepository gameRepository,
         SeasonRepository seasonRepository,
         TeamRepository teamRepository,
-        TeamSeasonResultRepository teamSeasonResultRepository,
         PowerRankingRepository powerRankingRepository
     ) {
         this.gameRepository = gameRepository;
         this.seasonRepository = seasonRepository;
         this.teamRepository = teamRepository;
-        this.teamSeasonResultRepository = teamSeasonResultRepository;
         this.powerRankingRepository = powerRankingRepository;
     }
 
@@ -323,27 +319,6 @@ public class PowerRankingService {
 
     // ── 계산 헬퍼 ──────────────────────────────────────────────────────────
 
-    /**
-     * 시즌 기준 경기수 자동 감지.
-     * 각 팀의 실제 경기수 최빈값(mode)을 반환.
-     * 4경기제/8경기제 등 시즌별 포맷이 달라도 자동 대응.
-     */
-    private int computeSeasonStandard(List<Game> regularGames) {
-        if (regularGames.isEmpty()) return 8;
-        Map<Long, Integer> counts = new HashMap<>();
-        for (Game g : regularGames) {
-            Long hId = g.getHomeTeam().getId();
-            Long aId = g.getAwayTeam().getId();
-            counts.put(hId, counts.getOrDefault(hId, 0) + 1);
-            counts.put(aId, counts.getOrDefault(aId, 0) + 1);
-        }
-        return counts.values().stream()
-            .collect(Collectors.groupingBy(v -> v, Collectors.counting()))
-            .entrySet().stream()
-            .max(Map.Entry.comparingByValue())
-            .map(Map.Entry::getKey)
-            .orElse(8);
-    }
 
     /** 예선 원점수 = 승×3 + 무×1 (미리 로드된 게임 목록 사용, DB 재조회 없음) */
     private BigDecimal calcPrelimFromGames(Long teamId, List<Game> games) {
@@ -429,7 +404,7 @@ public class PowerRankingService {
 
         // 버금 점수: 결승 진출팀만 부여 (비결승 라운드는 0점)
         int beogumPoints = 0;
-        if (bestBeogumRound != null && "FINAL".equalsIgnoreCase(bestBeogumRound)) {
+        if ("FINAL".equalsIgnoreCase(bestBeogumRound)) {
             beogumPoints = wonBeogumFinal ? 10 : 5;
         }
 

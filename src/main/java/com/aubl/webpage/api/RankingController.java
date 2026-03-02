@@ -23,7 +23,7 @@ public class RankingController {
 
     @GetMapping("/batters")
     public ResponseEntity<List<BatterRecord>> getBatterRankings(
-        @RequestParam(required = true) Long seasonId,
+        @RequestParam Long seasonId,
         @RequestParam(defaultValue = "0") int limit,
         @RequestParam(required = false) String sort,
         @RequestParam(required = false) String sortOrder,
@@ -41,7 +41,7 @@ public class RankingController {
 
     @GetMapping("/pitchers")
     public ResponseEntity<List<PitcherRecord>> getPitcherRankings(
-        @RequestParam(required = true) Long seasonId,
+        @RequestParam Long seasonId,
         @RequestParam(defaultValue = "0") int limit,
         @RequestParam(required = false) String sort,
         @RequestParam(required = false) String sortOrder,

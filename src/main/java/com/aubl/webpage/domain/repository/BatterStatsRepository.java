@@ -3,8 +3,6 @@ package com.aubl.webpage.domain.repository;
 import com.aubl.webpage.domain.entity.BatterStats;
 import java.util.List;
 import java.util.Optional;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -21,8 +19,6 @@ public interface BatterStatsRepository extends JpaRepository<BatterStats, Long> 
 
     Optional<BatterStats> findByTeamPlayerIdAndSeasonIdAndSeasonTypeIsNull(Long teamPlayerId, Long seasonId);
 
-    @EntityGraph(attributePaths = {"teamPlayer", "teamPlayer.player", "teamPlayer.team", "season"})
-    Page<BatterStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"teamPlayer", "teamPlayer.player", "teamPlayer.team", "season"})
     List<BatterStats> findBySeasonIdAndSeasonTypeIsNull(Long seasonId, Sort sort);
