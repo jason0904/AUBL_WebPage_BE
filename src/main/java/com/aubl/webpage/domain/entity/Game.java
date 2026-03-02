@@ -70,3 +70,4 @@ public class Game {
     @Column(name = "csv_file_path", length = 500)
     private String csvFilePath;
 }
+

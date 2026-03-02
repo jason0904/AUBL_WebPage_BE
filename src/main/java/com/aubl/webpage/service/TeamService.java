@@ -44,7 +44,14 @@ public class TeamService {
     @Transactional(readOnly = true)
     public List<TeamSummary> getTeams() {
         return teamRepository.findAll(Sort.by(Sort.Direction.ASC, "teamName")).stream()
-            .map(t -> new TeamSummary(t.getId(), t.getTeamName(), t.getTeamCode()))
+            .map(t -> new TeamSummary(t.getId(), t.getTeamName(), t.getTeamCode(), t.isActive()))
             .toList();
+    }
+
+    @Transactional
+    public void updateTeamActive(Long teamId, boolean active) {
+        Team team = teamRepository.findById(teamId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "team not found"));
+        team.setActive(active);
     }
 }

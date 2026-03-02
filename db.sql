@@ -57,6 +57,7 @@ CREATE TABLE TEAM (
                       team_name VARCHAR(100) NOT NULL,
                       team_code VARCHAR(20),  -- 팀 약어
                       manager_id INT,  -- 팀 매니저 (USER 테이블 참조, NULL 가능)
+                      is_active BOOLEAN NOT NULL DEFAULT TRUE,  -- 팀 활성화 여부 (FALSE = 탈퇴/퇴출)
 
                       FOREIGN KEY (manager_id) REFERENCES USER(user_id)
 );
@@ -88,7 +89,7 @@ CREATE TABLE TEAM_PLAYER (
                              player_id INT NOT NULL,
                              season_id INT NOT NULL,
                              jersey_number INT,  -- 등번호
-                             part_code VARCHAR(2),  -- 조 구분(1~8)
+                             part_code VARCHAR(2),  -- 조 구분 (1~8, group A~H 매핑: 1=A, 2=B, ..., 8=H)
 
                              FOREIGN KEY (team_id) REFERENCES TEAM(team_id),
                              FOREIGN KEY (player_id) REFERENCES PLAYER(player_id),

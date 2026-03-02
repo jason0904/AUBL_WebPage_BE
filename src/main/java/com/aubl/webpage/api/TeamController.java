@@ -8,13 +8,14 @@ import com.aubl.webpage.service.TeamService;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/teams")
 public class TeamController {
 
     private final TeamService teamService;
@@ -23,14 +24,22 @@ public class TeamController {
         this.teamService = teamService;
     }
 
-    @GetMapping
+    @GetMapping("/api/teams")
     public ResponseEntity<List<TeamSummary>> getTeams() {
         return ResponseEntity.ok(teamService.getTeams());
     }
 
-    @PostMapping
+    @PostMapping("/api/teams")
     public ResponseEntity<IdResponse> createTeam(@RequestBody TeamCreateRequest request) {
         Team team = teamService.createTeam(request);
         return ResponseEntity.ok(new IdResponse(team.getId()));
+    }
+
+    @PatchMapping("/api/admin/teams/{teamId}/active")
+    public ResponseEntity<Void> updateTeamActive(
+            @PathVariable Long teamId,
+            @RequestParam boolean active) {
+        teamService.updateTeamActive(teamId, active);
+        return ResponseEntity.noContent().build();
     }
 }

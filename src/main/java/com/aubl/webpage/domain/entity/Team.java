@@ -40,4 +40,7 @@ public class Team {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")
     private UserAccount manager;
+
+    @Column(name = "is_active", nullable = false)
+    private boolean active = true;
 }

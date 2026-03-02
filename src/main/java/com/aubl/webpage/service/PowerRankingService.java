@@ -4,7 +4,6 @@ import com.aubl.webpage.domain.entity.Game;
 import com.aubl.webpage.domain.entity.PowerRanking;
 import com.aubl.webpage.domain.entity.Season;
 import com.aubl.webpage.domain.entity.Team;
-import com.aubl.webpage.domain.entity.TeamSeasonResult;
 import com.aubl.webpage.domain.repository.GameRepository;
 import com.aubl.webpage.domain.repository.PowerRankingRepository;
 import com.aubl.webpage.domain.repository.SeasonRepository;
@@ -20,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,9 +33,8 @@ public class PowerRankingService {
     private static final BigDecimal W2 = new BigDecimal("0.6");
     private static final BigDecimal W3 = new BigDecimal("1.0");
 
-    // 본선 라운드별 점수
-    private static final Map<String, Integer> ROUND_POINTS = Map.of(
-        "FINAL",         25,   // 우승 (준우승은 별도 처리)
+    // 으뜸(EUTTEUM) 라운드별 점수 (FINAL은 별도 처리: 우승=25, 준우승=20)
+    private static final Map<String, Integer> EUTTEUM_ROUND_POINTS = Map.of(
         "SEMI_FINAL",    15,
         "QUARTER_FINAL", 10,
         "ROUND_OF_16",    5
@@ -66,9 +65,6 @@ public class PowerRankingService {
     /**
      * 특정 rankingYear의 파워랭킹 목록 조회.
      * POWER_RANKING 캐시(최신 버전)에서 조회. 캐시 없으면 빈 배열 반환.
-     *
-     * @param rankingYear 기준 연도 (필수)
-     * @param limit       상위 N개 제한 (0 = 전체)
      */
     @Transactional(readOnly = true)
     public List<PowerRankingRow> getPowerRanking(Integer rankingYear, int limit) {
@@ -76,20 +72,27 @@ public class PowerRankingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "rankingYear is required");
         }
 
-        // 최신 calc_version 조회
         int latestVersion = powerRankingRepository.findMaxCalcVersion(rankingYear).orElse(0);
         if (latestVersion == 0) {
-            return List.of(); // 캐시 없음 → 빈 배열
+            return List.of();
         }
 
         List<PowerRanking> rows = powerRankingRepository.findByYearAndVersion(rankingYear, latestVersion);
 
-        // limit 적용
+        // 이벤트 팀 제외: 팀명이 숫자 또는 영문자로 시작하는 팀 (TEAM WILSON, 2025 올스타 등)
+        rows = rows.stream()
+            .filter(pr -> {
+                String name = pr.getTeam().getTeamName();
+                if (name == null || name.isEmpty()) return true;
+                char first = name.charAt(0);
+                return !(first < 128 && Character.isLetterOrDigit(first));
+            })
+            .collect(Collectors.toList());
+
         if (limit > 0 && rows.size() > limit) {
             rows = rows.subList(0, limit);
         }
 
-        // rank 부여 (weightedScore DESC 기준, 이미 쿼리에서 정렬됨)
         List<PowerRankingRow> result = new ArrayList<>();
         for (int i = 0; i < rows.size(); i++) {
             PowerRanking pr = rows.get(i);
@@ -139,23 +142,20 @@ public class PowerRankingService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                 "Team not found: " + teamId));
 
-        // 캐시 조회
         List<PowerRanking> cached = powerRankingRepository.findByTeamIdAndYearRange(teamId, fromYear, toYear);
 
-        // 캐시가 있으면 캐시 기반 변환
         if (!cached.isEmpty()) {
             return cached.stream()
                 .map(pr -> new SeasonScoreRow(
                     pr.getRankingYear(),
-                    pr.getY3Score(),          // 해당 연도 원점수
-                    pr.getY3Score(),          // normalized = y3 (단일 연도 조회 시)
-                    BigDecimal.ZERO,          // finalsPoints는 y3에 포함됨
+                    pr.getY3Score(),
+                    pr.getY3Score(),
+                    BigDecimal.ZERO,
                     pr.getY3Score()
                 ))
                 .toList();
         }
 
-        // 캐시 없으면 실시간 계산
         return computeSeasonScores(teamId, fromYear, toYear);
     }
 
@@ -169,19 +169,26 @@ public class PowerRankingService {
             if (seasonOpt.isEmpty()) continue;
             Season season = seasonOpt.get();
 
+            // 정규시즌 게임 한 번만 로드
+            List<Game> regularGames = gameRepository.findRegularSeasonGames(season.getId());
+
             // 예선 원점수
-            BigDecimal prelimRaw = calcPrelimRaw(teamId, season);
-            // 환산 기준 경기수
-            int standard = teamSeasonResultRepository
-                .findByTeamIdAndSeasonId(teamId, season.getId())
-                .map(TeamSeasonResult::getPrelimGamesStandard)
-                .orElse(4);
+            BigDecimal prelimRaw = calcPrelimFromGames(teamId, regularGames);
+
             // 실제 경기수
-            int played = countPrelimGames(teamId, season.getId());
-            BigDecimal prelimNormalized = played > 0 && played < standard
-                ? prelimRaw.multiply(BigDecimal.valueOf(standard))
-                    .divide(BigDecimal.valueOf(played), 3, RoundingMode.HALF_UP)
-                : prelimRaw;
+            int played = (int) regularGames.stream()
+                .filter(g -> g.getHomeTeam().getId().equals(teamId)
+                    || g.getAwayTeam().getId().equals(teamId))
+                .count();
+
+            // 정규화: 4/6/9경기 포맷만 8경기 기준으로 환산
+            BigDecimal prelimNormalized;
+            if (played == 4 || played == 6 || played == 9) {
+                prelimNormalized = prelimRaw.multiply(BigDecimal.valueOf(8))
+                    .divide(BigDecimal.valueOf(played), 3, RoundingMode.HALF_UP);
+            } else {
+                prelimNormalized = prelimRaw;
+            }
 
             // 본선 점수
             BigDecimal finalsPoints = BigDecimal.valueOf(calcFinalsPoints(teamId, season.getId()));
@@ -197,8 +204,6 @@ public class PowerRankingService {
 
     /**
      * 파워랭킹 집계 재계산 및 POWER_RANKING 테이블 갱신.
-     * rankingYear 는 fromYear~toYear 범위의 각 연도에 대해 독립적으로 계산.
-     * (각 rankingYear = 그 해 + 직전 2년의 가중 합산)
      */
     @Transactional
     public RebuildResult rebuild(Integer fromYear, Integer toYear) {
@@ -221,23 +226,36 @@ public class PowerRankingService {
     }
 
     private void rebuildForYear(int rankingYear) {
-        // 3개년 윈도우: y1(가중치 0.3), y2(0.6), rankingYear(1.0)
-        int y1 = rankingYear - 2;
-        int y2 = rankingYear - 1;
+        // 3개년 윈도우: y1(가중치 0.3), y2(0.6), y3(1.0)
+        // 직전 3개 완료 시즌 데이터 사용
+        // 예: rankingYear=2026 → y1=2023, y2=2024, y3=2025
+        int y3 = rankingYear - 1;
+        int y1 = rankingYear - 3;
+        int y2 = rankingYear - 2;
 
-        // 다음 버전 번호
         int nextVersion = powerRankingRepository.findMaxCalcVersion(rankingYear)
             .map(v -> v + 1).orElse(1);
 
-        // 3개년 내 모든 팀 수집
         Map<Long, TeamScoreAccumulator> accMap = new HashMap<>();
 
-        for (int year : new int[]{y1, y2, rankingYear}) {
+        for (int year : new int[]{y1, y2, y3}) {
             Optional<Season> seasonOpt = seasonRepository.findByYear(year);
             if (seasonOpt.isEmpty()) continue;
             Season season = seasonOpt.get();
 
+            // 정규시즌 게임 한 번만 로드
             List<Game> regularGames = gameRepository.findRegularSeasonGames(season.getId());
+
+            // 팀별 실제 경기수 집계
+            Map<Long, Integer> teamGameCounts = new HashMap<>();
+            for (Game g : regularGames) {
+                Long hId = g.getHomeTeam().getId();
+                Long aId = g.getAwayTeam().getId();
+                teamGameCounts.put(hId, teamGameCounts.getOrDefault(hId, 0) + 1);
+                teamGameCounts.put(aId, teamGameCounts.getOrDefault(aId, 0) + 1);
+            }
+
+            // 팀 수집
             for (Game g : regularGames) {
                 accMap.computeIfAbsent(g.getHomeTeam().getId(),
                     id -> new TeamScoreAccumulator(g.getHomeTeam()));
@@ -245,18 +263,30 @@ public class PowerRankingService {
                     id -> new TeamScoreAccumulator(g.getAwayTeam()));
             }
 
+            // 포스트시즌 게임 한 번만 로드
+            List<Game> playoffGames = gameRepository.findPlayoffGamesBySeasonId(season.getId());
+
             for (TeamScoreAccumulator acc : accMap.values()) {
-                BigDecimal prelim = calcPrelimRaw(acc.team.getId(), season);
-                int standard = teamSeasonResultRepository
-                    .findByTeamIdAndSeasonId(acc.team.getId(), season.getId())
-                    .map(TeamSeasonResult::getPrelimGamesStandard).orElse(4);
-                int played = countPrelimGames(acc.team.getId(), season.getId());
-                BigDecimal prelimNorm = played > 0 && played < standard
-                    ? prelim.multiply(BigDecimal.valueOf(standard))
-                        .divide(BigDecimal.valueOf(played), 3, RoundingMode.HALF_UP)
-                    : prelim;
+                // 예선 원점수 (로드된 게임 목록에서 계산, DB 재조회 없음)
+                BigDecimal prelim = calcPrelimFromGames(acc.team.getId(), regularGames);
+
+                // 실제 경기수 (로드된 목록에서 계산)
+                int played = teamGameCounts.getOrDefault(acc.team.getId(), 0);
+
+                // 정규화: 4/6/9경기 포맷만 8경기 기준으로 환산
+                // (7경기 등 부분 참가 또는 표준 8경기는 원점수 그대로)
+                BigDecimal prelimNorm;
+                if (played == 4 || played == 6 || played == 9) {
+                    prelimNorm = prelim.multiply(BigDecimal.valueOf(8))
+                        .divide(BigDecimal.valueOf(played), 3, RoundingMode.HALF_UP);
+                } else {
+                    prelimNorm = prelim;
+                }
+
+                // 본선 점수 (티어 구분, 로드된 목록 사용)
                 BigDecimal finals = BigDecimal.valueOf(
-                    calcFinalsPoints(acc.team.getId(), season.getId()));
+                    calcFinalsPointsFromGames(acc.team.getId(), playoffGames));
+
                 BigDecimal yearScore = prelimNorm.add(finals).setScale(3, RoundingMode.HALF_UP);
 
                 if (year == y1) acc.y1 = yearScore;
@@ -266,7 +296,7 @@ public class PowerRankingService {
         }
 
         // PowerRanking 저장
-        List<String> windowList = buildWindowYears(y1, y2, rankingYear);
+        List<String> windowList = buildWindowYears(y1, y2, y3);
         String windowJson = "[" + String.join(",", windowList) + "]";
 
         List<PowerRanking> toSave = new ArrayList<>();
@@ -293,9 +323,30 @@ public class PowerRankingService {
 
     // ── 계산 헬퍼 ──────────────────────────────────────────────────────────
 
-    /** 예선 원점수 = 승×3 + 무×1 */
-    private BigDecimal calcPrelimRaw(Long teamId, Season season) {
-        List<Game> games = gameRepository.findRegularSeasonGames(season.getId());
+    /**
+     * 시즌 기준 경기수 자동 감지.
+     * 각 팀의 실제 경기수 최빈값(mode)을 반환.
+     * 4경기제/8경기제 등 시즌별 포맷이 달라도 자동 대응.
+     */
+    private int computeSeasonStandard(List<Game> regularGames) {
+        if (regularGames.isEmpty()) return 8;
+        Map<Long, Integer> counts = new HashMap<>();
+        for (Game g : regularGames) {
+            Long hId = g.getHomeTeam().getId();
+            Long aId = g.getAwayTeam().getId();
+            counts.put(hId, counts.getOrDefault(hId, 0) + 1);
+            counts.put(aId, counts.getOrDefault(aId, 0) + 1);
+        }
+        return counts.values().stream()
+            .collect(Collectors.groupingBy(v -> v, Collectors.counting()))
+            .entrySet().stream()
+            .max(Map.Entry.comparingByValue())
+            .map(Map.Entry::getKey)
+            .orElse(8);
+    }
+
+    /** 예선 원점수 = 승×3 + 무×1 (미리 로드된 게임 목록 사용, DB 재조회 없음) */
+    private BigDecimal calcPrelimFromGames(Long teamId, List<Game> games) {
         int wins = 0, draws = 0;
         for (Game g : games) {
             boolean isHome = g.getHomeTeam().getId().equals(teamId);
@@ -309,27 +360,28 @@ public class PowerRankingService {
         return BigDecimal.valueOf(wins * 3L + draws).setScale(3, RoundingMode.HALF_UP);
     }
 
-    /** 실제 치른 예선 경기 수 */
-    private int countPrelimGames(Long teamId, Long seasonId) {
-        List<Game> games = gameRepository.findRegularSeasonGames(seasonId);
-        return (int) games.stream()
-            .filter(g -> g.getHomeTeam().getId().equals(teamId)
-                || g.getAwayTeam().getId().equals(teamId))
-            .count();
-    }
-
     /**
-     * 본선 점수.
-     * FINAL 경기 승자 = 25점, 패자 = 20점
-     * 그 외 라운드 = 해당 라운드 점수 (더 이상 진출 못한 라운드)
+     * 본선 점수 (DB 재조회 버전).
+     * 으뜸(EUTTEUM): 우승=25, 준우승=20, 4강=15, 8강=10, 16강=5
+     * 버금(BEOGEUM): 우승=10, 준우승=5, 나머지=0
      */
     private int calcFinalsPoints(Long teamId, Long seasonId) {
         List<Game> playoffs = gameRepository.findPlayoffGamesBySeasonId(seasonId);
+        return calcFinalsPointsFromGames(teamId, playoffs);
+    }
+
+    /**
+     * 본선 점수 (미리 로드된 게임 목록 사용, DB 재조회 없음).
+     * 으뜸(EUTTEUM): 우승=25, 준우승=20, 4강=15, 8강=10, 16강=5
+     * 버금(BEOGEUM): 우승=10, 준우승=5, 나머지=0
+     */
+    private int calcFinalsPointsFromGames(Long teamId, List<Game> playoffs) {
         if (playoffs.isEmpty()) return 0;
 
-        // 가장 높은 라운드 진출 여부 확인
-        String bestRound = null;
-        boolean wonFinal = false;
+        String bestEutteumRound = null;
+        boolean wonEutteumFinal = false;
+        String bestBeogumRound = null;
+        boolean wonBeogumFinal = false;
 
         for (Game g : playoffs) {
             boolean isHome = g.getHomeTeam().getId().equals(teamId);
@@ -339,25 +391,49 @@ public class PowerRankingService {
             String round = g.getPlayoffRound();
             if (round == null) continue;
 
-            // 더 높은 라운드면 갱신
-            if (bestRound == null || roundOrder(round) > roundOrder(bestRound)) {
-                bestRound = round;
-            }
-            // FINAL 경기 승자 체크
+            String tier = g.getPlayoffTier();
+            boolean isBeogum = "BEOGEUM".equalsIgnoreCase(tier);
+
+            boolean iWon = false;
             if ("FINAL".equalsIgnoreCase(round)
-                && g.getHomeScore() != null && g.getAwayScore() != null) {
-                boolean iWon = isHome
+                    && g.getHomeScore() != null && g.getAwayScore() != null) {
+                iWon = isHome
                     ? g.getHomeScore() > g.getAwayScore()
                     : g.getAwayScore() > g.getHomeScore();
-                if (iWon) wonFinal = true;
+            }
+
+            if (!isBeogum) {
+                // 으뜸 브래킷
+                if (bestEutteumRound == null || roundOrder(round) > roundOrder(bestEutteumRound)) {
+                    bestEutteumRound = round;
+                }
+                if ("FINAL".equalsIgnoreCase(round) && iWon) wonEutteumFinal = true;
+            } else {
+                // 버금 브래킷
+                if (bestBeogumRound == null || roundOrder(round) > roundOrder(bestBeogumRound)) {
+                    bestBeogumRound = round;
+                }
+                if ("FINAL".equalsIgnoreCase(round) && iWon) wonBeogumFinal = true;
             }
         }
 
-        if (bestRound == null) return 0;
-        if ("FINAL".equalsIgnoreCase(bestRound)) {
-            return wonFinal ? 25 : 20;
+        // 으뜸 점수: 결승=25/20, 4강=15, 8강=10, 16강=5
+        int eutteumPoints = 0;
+        if (bestEutteumRound != null) {
+            if ("FINAL".equalsIgnoreCase(bestEutteumRound)) {
+                eutteumPoints = wonEutteumFinal ? 25 : 20;
+            } else {
+                eutteumPoints = EUTTEUM_ROUND_POINTS.getOrDefault(bestEutteumRound.toUpperCase(), 0);
+            }
         }
-        return ROUND_POINTS.getOrDefault(bestRound.toUpperCase(), 0);
+
+        // 버금 점수: 결승 진출팀만 부여 (비결승 라운드는 0점)
+        int beogumPoints = 0;
+        if (bestBeogumRound != null && "FINAL".equalsIgnoreCase(bestBeogumRound)) {
+            beogumPoints = wonBeogumFinal ? 10 : 5;
+        }
+
+        return eutteumPoints + beogumPoints;
     }
 
     private int roundOrder(String round) {
@@ -417,4 +493,3 @@ public class PowerRankingService {
         String status
     ) {}
 }
-

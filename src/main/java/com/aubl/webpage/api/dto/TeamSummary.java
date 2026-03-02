@@ -3,6 +3,7 @@ package com.aubl.webpage.api.dto;
 public record TeamSummary(
     Long id,
     String teamName,
-    String teamCode
+    String teamCode,
+    boolean active
 ) {
 }
